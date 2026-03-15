@@ -116,6 +116,14 @@ public class PowerPointHandler : IDocumentHandler
                     }
                     shapeIdx++;
                 }
+                else if (child is GraphicFrame gf && gf.Descendants<Drawing.Table>().Any())
+                {
+                    var table = gf.Descendants<Drawing.Table>().First();
+                    var tblRows = table.Elements<Drawing.TableRow>().Count();
+                    var tblCols = table.Elements<Drawing.TableRow>().FirstOrDefault()?.Elements<Drawing.TableCell>().Count() ?? 0;
+                    var tblName = gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties?.Name?.Value ?? "Table";
+                    sb.AppendLine($"  [Table] \"{tblName}\" \u2190 {tblRows}x{tblCols}");
+                }
                 else if (child is Picture pic)
                 {
                     var name = pic.NonVisualPictureProperties?.NonVisualDrawingProperties?.Name?.Value ?? "Picture";
@@ -397,6 +405,96 @@ public class PowerPointHandler : IDocumentHandler
             return paraNode;
         }
 
+        // Try table cell path: /slide[N]/table[M]/tr[R]/tc[C]
+        var tblCellGetMatch = Regex.Match(path, @"^/slide\[(\d+)\]/table\[(\d+)\]/tr\[(\d+)\]/tc\[(\d+)\]$");
+        if (tblCellGetMatch.Success)
+        {
+            var sIdx = int.Parse(tblCellGetMatch.Groups[1].Value);
+            var tIdx = int.Parse(tblCellGetMatch.Groups[2].Value);
+            var rIdx = int.Parse(tblCellGetMatch.Groups[3].Value);
+            var cIdx = int.Parse(tblCellGetMatch.Groups[4].Value);
+
+            var (slidePart2, table) = ResolveTable(sIdx, tIdx);
+            var tableRows = table.Elements<Drawing.TableRow>().ToList();
+            if (rIdx < 1 || rIdx > tableRows.Count)
+                throw new ArgumentException($"Row {rIdx} not found (table has {tableRows.Count} rows)");
+            var cells = tableRows[rIdx - 1].Elements<Drawing.TableCell>().ToList();
+            if (cIdx < 1 || cIdx > cells.Count)
+                throw new ArgumentException($"Cell {cIdx} not found (row has {cells.Count} cells)");
+
+            var cell = cells[cIdx - 1];
+            var cellText = cell.TextBody?.InnerText ?? "";
+            var cellNode = new DocumentNode
+            {
+                Path = path,
+                Type = "tc",
+                Text = cellText
+            };
+
+            // Cell fill
+            var tcPr = cell.TableCellProperties ?? cell.GetFirstChild<Drawing.TableCellProperties>();
+            var cellFillHex = tcPr?.GetFirstChild<Drawing.SolidFill>()?.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
+            if (cellFillHex != null) cellNode.Format["fill"] = cellFillHex;
+
+            // Font info from first run
+            var firstRun = cell.Descendants<Drawing.Run>().FirstOrDefault();
+            if (firstRun?.RunProperties != null)
+            {
+                var f = firstRun.RunProperties.GetFirstChild<Drawing.LatinFont>()?.Typeface
+                    ?? firstRun.RunProperties.GetFirstChild<Drawing.EastAsianFont>()?.Typeface;
+                if (f != null) cellNode.Format["font"] = f;
+                var fs = firstRun.RunProperties.FontSize?.Value;
+                if (fs.HasValue) cellNode.Format["size"] = $"{fs.Value / 100}pt";
+                if (firstRun.RunProperties.Bold?.Value == true) cellNode.Format["bold"] = true;
+                if (firstRun.RunProperties.Italic?.Value == true) cellNode.Format["italic"] = true;
+                var colorHex = firstRun.RunProperties.GetFirstChild<Drawing.SolidFill>()
+                    ?.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
+                if (colorHex != null) cellNode.Format["color"] = colorHex;
+            }
+
+            return cellNode;
+        }
+
+        // Try placeholder path with type name: /slide[N]/placeholder[title]
+        var phGetMatch = Regex.Match(path, @"^/slide\[(\d+)\]/placeholder\[(\w+)\]$");
+        if (phGetMatch.Success && !Regex.IsMatch(path, @"^/slide\[\d+\](?:/\w+\[\d+\])?$"))
+        {
+            var phSlideIdx = int.Parse(phGetMatch.Groups[1].Value);
+            var phId = phGetMatch.Groups[2].Value;
+
+            var phSlideParts = GetSlideParts().ToList();
+            if (phSlideIdx < 1 || phSlideIdx > phSlideParts.Count)
+                throw new ArgumentException($"Slide {phSlideIdx} not found");
+
+            var phSlidePart = phSlideParts[phSlideIdx - 1];
+
+            // If numeric, delegate to GetPlaceholderNode
+            if (int.TryParse(phId, out var phNumIdx))
+                return GetPlaceholderNode(phSlidePart, phSlideIdx, phNumIdx, depth);
+
+            // By type name: resolve the shape and return its node
+            var phShape = ResolvePlaceholderShape(phSlidePart, phId);
+            var ph = phShape.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                ?.GetFirstChild<PlaceholderShape>();
+            var shapeTree = GetSlide(phSlidePart).CommonSlideData?.ShapeTree;
+            var shapeIdx = shapeTree?.Elements<Shape>().ToList().IndexOf(phShape) ?? 0;
+            var node = ShapeToNode(phShape, phSlideIdx, shapeIdx + 1, depth);
+            node.Path = path;
+            node.Type = "placeholder";
+            if (ph?.Type?.HasValue == true) node.Format["phType"] = ph.Type.InnerText;
+            if (ph?.Index?.HasValue == true) node.Format["phIndex"] = ph.Index.Value;
+            return node;
+        }
+
+        // Try resolving logical paths with deeper segments (e.g. /slide[1]/table[1]/tr[1])
+        // Only for paths not handled by dedicated handlers above
+        if (Regex.IsMatch(path, @"^/slide\[\d+\]/(table\[\d+\]/(tr|tc)|placeholder\[\w+\]/)"))
+        {
+            var logicalResolved = ResolveLogicalPath(path);
+            if (logicalResolved.HasValue)
+                return GenericXmlQuery.ElementToNode(logicalResolved.Value.element, path, depth);
+        }
+
         // Parse /slide[N] or /slide[N]/shape[M]
         var match = Regex.Match(path, @"^/slide\[(\d+)\](?:/(\w+)\[(\d+)\])?$");
         if (!match.Success)
@@ -459,6 +557,18 @@ public class PowerPointHandler : IDocumentHandler
                 throw new ArgumentException($"Shape {elementIdx} not found (total: {shapes.Count})");
             return ShapeToNode(shapes[elementIdx - 1], slideIdx, elementIdx, depth);
         }
+        else if (elementType == "table")
+        {
+            var tables = shapeTreeEl.Elements<GraphicFrame>()
+                .Where(gf => gf.Descendants<Drawing.Table>().Any()).ToList();
+            if (elementIdx < 1 || elementIdx > tables.Count)
+                throw new ArgumentException($"Table {elementIdx} not found (total: {tables.Count})");
+            return TableToNode(tables[elementIdx - 1], slideIdx, elementIdx, depth);
+        }
+        else if (elementType == "placeholder")
+        {
+            return GetPlaceholderNode(targetSlidePart, slideIdx, elementIdx, depth);
+        }
         else if (elementType == "picture" || elementType == "pic")
         {
             var pics = shapeTreeEl.Elements<Picture>().ToList();
@@ -485,11 +595,15 @@ public class PowerPointHandler : IDocumentHandler
 
         // Scheme B: generic XML fallback for unrecognized element types
         // Check if selector has a type that ParseShapeSelector didn't recognize
-        var typeMatch = Regex.Match(selector.Contains(']') ? selector.Split(']').Last() : selector, @"^(?:slide\[\d+\]\s*>?\s*)?([\w:]+)");
+        // Extract raw element type for generic XML fallback check
+        // Strip pseudo-selectors (:contains, :empty, :no-alt) and attribute filters before checking
+        var selectorForType = Regex.Replace(selector, @":(contains\([^)]*\)|empty|no-alt)", "");
+        var typeMatch = Regex.Match(selectorForType.Contains(']') ? selectorForType.Split(']').Last() : selectorForType, @"^(?:slide\[\d+\]\s*>?\s*)?([\w:]+)");
         var rawType = typeMatch.Success ? typeMatch.Groups[1].Value.ToLowerInvariant() : "";
         bool isKnownType = string.IsNullOrEmpty(rawType)
             || rawType is "shape" or "textbox" or "title" or "picture" or "pic"
-                or "equation" or "math" or "formula";
+                or "equation" or "math" or "formula"
+                or "table" or "placeholder";
         if (!isKnownType)
         {
             var genericParsed = GenericXmlQuery.ParseSelector(selector);
@@ -552,6 +666,54 @@ public class PowerPointHandler : IDocumentHandler
                         results.Add(PictureToNode(pic, slideNum, picIdx + 1));
                     }
                     picIdx++;
+                }
+            }
+
+            if (parsed.ElementType == "table" || (parsed.ElementType == null && !isEquationSelector))
+            {
+                int tblIdx = 0;
+                foreach (var gf in shapeTree.Elements<GraphicFrame>())
+                {
+                    if (!gf.Descendants<Drawing.Table>().Any()) continue;
+                    tblIdx++;
+                    var tblNode = TableToNode(gf, slideNum, tblIdx, 0);
+                    if (parsed.TextContains != null)
+                    {
+                        // GraphicData children may be opaque when loaded from disk,
+                        // so extract text from all <a:t> elements via OuterXml
+                        var xml = gf.OuterXml;
+                        var textMatches = Regex.Matches(xml, @"<a:t[^>]*>([^<]*)</a:t>");
+                        var allText = string.Concat(textMatches.Select(m => m.Groups[1].Value));
+                        if (!allText.Contains(parsed.TextContains, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                    }
+                    results.Add(tblNode);
+                }
+            }
+
+            if (parsed.ElementType == "placeholder")
+            {
+                int phIdx = 0;
+                foreach (var shape in shapeTree.Elements<Shape>())
+                {
+                    var ph = shape.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                        ?.GetFirstChild<PlaceholderShape>();
+                    if (ph == null) continue;
+                    phIdx++;
+
+                    if (parsed.TextContains != null)
+                    {
+                        var shapeText = GetShapeText(shape);
+                        if (!shapeText.Contains(parsed.TextContains, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                    }
+
+                    var node = ShapeToNode(shape, slideNum, phIdx, 0);
+                    node.Path = $"/slide[{slideNum}]/placeholder[{phIdx}]";
+                    node.Type = "placeholder";
+                    if (ph.Type?.HasValue == true) node.Format["phType"] = ph.Type.InnerText;
+                    if (ph.Index?.HasValue == true) node.Format["phIndex"] = ph.Index.Value;
+                    results.Add(node);
                 }
             }
         }
@@ -652,6 +814,140 @@ public class PowerPointHandler : IDocumentHandler
             return unsupported;
         }
 
+        // Try table cell path: /slide[N]/table[M]/tr[R]/tc[C]
+        var tblCellMatch = Regex.Match(path, @"^/slide\[(\d+)\]/table\[(\d+)\]/tr\[(\d+)\]/tc\[(\d+)\]$");
+        if (tblCellMatch.Success)
+        {
+            var slideIdx = int.Parse(tblCellMatch.Groups[1].Value);
+            var tblIdx = int.Parse(tblCellMatch.Groups[2].Value);
+            var rowIdx = int.Parse(tblCellMatch.Groups[3].Value);
+            var cellIdx = int.Parse(tblCellMatch.Groups[4].Value);
+
+            var (slidePart, table) = ResolveTable(slideIdx, tblIdx);
+            var tableRows = table.Elements<Drawing.TableRow>().ToList();
+            if (rowIdx < 1 || rowIdx > tableRows.Count)
+                throw new ArgumentException($"Row {rowIdx} not found (table has {tableRows.Count} rows)");
+            var cells = tableRows[rowIdx - 1].Elements<Drawing.TableCell>().ToList();
+            if (cellIdx < 1 || cellIdx > cells.Count)
+                throw new ArgumentException($"Cell {cellIdx} not found (row has {cells.Count} cells)");
+
+            var cell = cells[cellIdx - 1];
+            var unsupported = SetTableCellProperties(cell, properties);
+            GetSlide(slidePart).Save();
+            return unsupported;
+        }
+
+        // Try table-level path: /slide[N]/table[M]
+        var tblMatch = Regex.Match(path, @"^/slide\[(\d+)\]/table\[(\d+)\]$");
+        if (tblMatch.Success)
+        {
+            var slideIdx = int.Parse(tblMatch.Groups[1].Value);
+            var tblIdx = int.Parse(tblMatch.Groups[2].Value);
+
+            var slideParts2 = GetSlideParts().ToList();
+            if (slideIdx < 1 || slideIdx > slideParts2.Count)
+                throw new ArgumentException($"Slide {slideIdx} not found");
+
+            var slidePart = slideParts2[slideIdx - 1];
+            var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree
+                ?? throw new ArgumentException("Slide has no shape tree");
+            var graphicFrames = shapeTree.Elements<GraphicFrame>()
+                .Where(gf => gf.Descendants<Drawing.Table>().Any()).ToList();
+            if (tblIdx < 1 || tblIdx > graphicFrames.Count)
+                throw new ArgumentException($"Table {tblIdx} not found (total: {graphicFrames.Count})");
+
+            var gf = graphicFrames[tblIdx - 1];
+            var unsupported = new List<string>();
+            foreach (var (key, value) in properties)
+            {
+                switch (key.ToLowerInvariant())
+                {
+                    case "x" or "y" or "width" or "height":
+                    {
+                        var xfrm = gf.Transform ?? (gf.Transform = new Transform());
+                        var offset = xfrm.Offset ?? (xfrm.Offset = new Drawing.Offset());
+                        var extents = xfrm.Extents ?? (xfrm.Extents = new Drawing.Extents());
+                        var emu = ParseEmu(value);
+                        switch (key.ToLowerInvariant())
+                        {
+                            case "x": offset.X = emu; break;
+                            case "y": offset.Y = emu; break;
+                            case "width": extents.Cx = emu; break;
+                            case "height": extents.Cy = emu; break;
+                        }
+                        break;
+                    }
+                    case "name":
+                        var nvPr = gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties;
+                        if (nvPr != null) nvPr.Name = value;
+                        break;
+                    default:
+                        if (!GenericXmlQuery.SetGenericAttribute(gf, key, value))
+                            unsupported.Add(key);
+                        break;
+                }
+            }
+            GetSlide(slidePart).Save();
+            return unsupported;
+        }
+
+        // Try table row path: /slide[N]/table[M]/tr[R]
+        var tblRowMatch = Regex.Match(path, @"^/slide\[(\d+)\]/table\[(\d+)\]/tr\[(\d+)\]$");
+        if (tblRowMatch.Success)
+        {
+            var slideIdx = int.Parse(tblRowMatch.Groups[1].Value);
+            var tblIdx = int.Parse(tblRowMatch.Groups[2].Value);
+            var rowIdx = int.Parse(tblRowMatch.Groups[3].Value);
+
+            var (slidePart, table) = ResolveTable(slideIdx, tblIdx);
+            var tableRows = table.Elements<Drawing.TableRow>().ToList();
+            if (rowIdx < 1 || rowIdx > tableRows.Count)
+                throw new ArgumentException($"Row {rowIdx} not found (table has {tableRows.Count} rows)");
+
+            var row = tableRows[rowIdx - 1];
+            var unsupported = new List<string>();
+            foreach (var (key, value) in properties)
+            {
+                switch (key.ToLowerInvariant())
+                {
+                    case "height":
+                        row.Height = ParseEmu(value);
+                        break;
+                    default:
+                        // Apply to all cells in this row
+                        var cellUnsup = new HashSet<string>();
+                        foreach (var cell in row.Elements<Drawing.TableCell>())
+                        {
+                            var u = SetTableCellProperties(cell, new Dictionary<string, string> { { key, value } });
+                            foreach (var k in u) cellUnsup.Add(k);
+                        }
+                        unsupported.AddRange(cellUnsup);
+                        break;
+                }
+            }
+            GetSlide(slidePart).Save();
+            return unsupported;
+        }
+
+        // Try placeholder path: /slide[N]/placeholder[M] or /slide[N]/placeholder[type]
+        var phMatch = Regex.Match(path, @"^/slide\[(\d+)\]/placeholder\[(\w+)\]$");
+        if (phMatch.Success)
+        {
+            var slideIdx = int.Parse(phMatch.Groups[1].Value);
+            var phId = phMatch.Groups[2].Value;
+
+            var slideParts2 = GetSlideParts().ToList();
+            if (slideIdx < 1 || slideIdx > slideParts2.Count)
+                throw new ArgumentException($"Slide {slideIdx} not found");
+            var slidePart = slideParts2[slideIdx - 1];
+            var shape = ResolvePlaceholderShape(slidePart, phId);
+
+            var allRuns = shape.Descendants<Drawing.Run>().ToList();
+            var unsupported = SetRunOrShapeProperties(properties, allRuns, shape);
+            GetSlide(slidePart).Save();
+            return unsupported;
+        }
+
         // Try shape-level path: /slide[N]/shape[M]
         var match = Regex.Match(path, @"^/slide\[(\d+)\]/shape\[(\d+)\]$");
         if (match.Success)
@@ -668,22 +964,35 @@ public class PowerPointHandler : IDocumentHandler
 
         // Generic XML fallback: navigate to element and set attributes
         {
-            var allSegments = GenericXmlQuery.ParsePathSegments(path);
-            if (allSegments.Count == 0 || !allSegments[0].Name.Equals("slide", StringComparison.OrdinalIgnoreCase) || !allSegments[0].Index.HasValue)
-                throw new ArgumentException($"Path must start with /slide[N]: {path}");
+            SlidePart fbSlidePart;
+            OpenXmlElement target;
 
-            var fbSlideIdx = allSegments[0].Index!.Value;
-            var fbSlideParts = GetSlideParts().ToList();
-            if (fbSlideIdx < 1 || fbSlideIdx > fbSlideParts.Count)
-                throw new ArgumentException($"Slide {fbSlideIdx} not found");
-
-            var fbSlidePart = fbSlideParts[fbSlideIdx - 1];
-            var remaining = allSegments.Skip(1).ToList();
-            OpenXmlElement target = GetSlide(fbSlidePart);
-            if (remaining.Count > 0)
+            // Try logical path resolution first (table/placeholder paths)
+            var logicalResult = ResolveLogicalPath(path);
+            if (logicalResult.HasValue)
             {
-                target = GenericXmlQuery.NavigateByPath(target, remaining)
-                    ?? throw new ArgumentException($"Element not found: {path}");
+                fbSlidePart = logicalResult.Value.slidePart;
+                target = logicalResult.Value.element;
+            }
+            else
+            {
+                var allSegments = GenericXmlQuery.ParsePathSegments(path);
+                if (allSegments.Count == 0 || !allSegments[0].Name.Equals("slide", StringComparison.OrdinalIgnoreCase) || !allSegments[0].Index.HasValue)
+                    throw new ArgumentException($"Path must start with /slide[N]: {path}");
+
+                var fbSlideIdx = allSegments[0].Index!.Value;
+                var fbSlideParts = GetSlideParts().ToList();
+                if (fbSlideIdx < 1 || fbSlideIdx > fbSlideParts.Count)
+                    throw new ArgumentException($"Slide {fbSlideIdx} not found");
+
+                fbSlidePart = fbSlideParts[fbSlideIdx - 1];
+                var remaining = allSegments.Skip(1).ToList();
+                target = GetSlide(fbSlidePart);
+                if (remaining.Count > 0)
+                {
+                    target = GenericXmlQuery.NavigateByPath(target, remaining)
+                        ?? throw new ArgumentException($"Element not found: {path}");
+                }
             }
 
             var unsup = new List<string>();
@@ -713,6 +1022,327 @@ public class PowerPointHandler : IDocumentHandler
 
         return (slidePart, shapes[shapeIdx - 1]);
     }
+
+    private (SlidePart slidePart, Drawing.Table table) ResolveTable(int slideIdx, int tblIdx)
+    {
+        var slideParts = GetSlideParts().ToList();
+        if (slideIdx < 1 || slideIdx > slideParts.Count)
+            throw new ArgumentException($"Slide {slideIdx} not found");
+
+        var slidePart = slideParts[slideIdx - 1];
+        var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree
+            ?? throw new ArgumentException($"Slide {slideIdx} has no shapes");
+
+        var tables = shapeTree.Elements<GraphicFrame>()
+            .Select(gf => gf.Descendants<Drawing.Table>().FirstOrDefault())
+            .Where(t => t != null).ToList();
+        if (tblIdx < 1 || tblIdx > tables.Count)
+            throw new ArgumentException($"Table {tblIdx} not found (total: {tables.Count})");
+
+        return (slidePart, tables[tblIdx - 1]!);
+    }
+
+    private static List<string> SetTableCellProperties(Drawing.TableCell cell, Dictionary<string, string> properties)
+    {
+        var unsupported = new List<string>();
+        foreach (var (key, value) in properties)
+        {
+            switch (key.ToLowerInvariant())
+            {
+                case "text":
+                {
+                    var textBody = cell.TextBody;
+                    if (textBody == null)
+                    {
+                        textBody = new Drawing.TextBody(
+                            new Drawing.BodyProperties(), new Drawing.ListStyle(),
+                            new Drawing.Paragraph(new Drawing.Run(
+                                new Drawing.RunProperties { Language = "zh-CN" },
+                                new Drawing.Text(value))));
+                        cell.PrependChild(textBody);
+                    }
+                    else
+                    {
+                        var firstRun = textBody.Descendants<Drawing.Run>().FirstOrDefault();
+                        var runProps = firstRun?.RunProperties?.CloneNode(true) as Drawing.RunProperties;
+                        textBody.RemoveAllChildren<Drawing.Paragraph>();
+                        var newRun = new Drawing.Run();
+                        if (runProps != null) newRun.RunProperties = runProps;
+                        else newRun.RunProperties = new Drawing.RunProperties { Language = "zh-CN" };
+                        newRun.Text = new Drawing.Text(value);
+                        textBody.Append(new Drawing.Paragraph(newRun));
+                    }
+                    break;
+                }
+                case "font":
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.LatinFont>();
+                        rProps.RemoveAllChildren<Drawing.EastAsianFont>();
+                        rProps.Append(new Drawing.LatinFont { Typeface = value });
+                        rProps.Append(new Drawing.EastAsianFont { Typeface = value });
+                    }
+                    break;
+                case "size":
+                    var sz = int.Parse(value) * 100;
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.FontSize = sz;
+                    }
+                    break;
+                case "bold":
+                    var b = bool.Parse(value);
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.Bold = b;
+                    }
+                    break;
+                case "italic":
+                    var it = bool.Parse(value);
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.Italic = it;
+                    }
+                    break;
+                case "color":
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.SolidFill>();
+                        var sf = new Drawing.SolidFill();
+                        sf.Append(new Drawing.RgbColorModelHex { Val = value.ToUpperInvariant() });
+                        rProps.AppendChild(sf);
+                    }
+                    break;
+                case "fill":
+                {
+                    var tcPr = cell.TableCellProperties ?? cell.GetFirstChild<Drawing.TableCellProperties>();
+                    if (tcPr == null)
+                    {
+                        tcPr = new Drawing.TableCellProperties();
+                        cell.Append(tcPr);
+                    }
+                    tcPr.RemoveAllChildren<Drawing.SolidFill>();
+                    tcPr.RemoveAllChildren<Drawing.NoFill>();
+                    if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    {
+                        tcPr.Append(new Drawing.NoFill());
+                    }
+                    else
+                    {
+                        var sf = new Drawing.SolidFill();
+                        sf.Append(new Drawing.RgbColorModelHex { Val = value.TrimStart('#').ToUpperInvariant() });
+                        tcPr.Append(sf);
+                    }
+                    break;
+                }
+                case "align":
+                {
+                    var para = cell.TextBody?.Elements<Drawing.Paragraph>().FirstOrDefault();
+                    if (para != null)
+                    {
+                        var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
+                        pProps.Alignment = value.ToLowerInvariant() switch
+                        {
+                            "left" or "l" => Drawing.TextAlignmentTypeValues.Left,
+                            "center" or "c" => Drawing.TextAlignmentTypeValues.Center,
+                            "right" or "r" => Drawing.TextAlignmentTypeValues.Right,
+                            "justify" or "j" => Drawing.TextAlignmentTypeValues.Justified,
+                            _ => throw new ArgumentException($"Unknown alignment: {value}")
+                        };
+                    }
+                    break;
+                }
+                default:
+                    if (!GenericXmlQuery.SetGenericAttribute(cell, key, value))
+                        unsupported.Add(key);
+                    break;
+            }
+        }
+        return unsupported;
+    }
+
+    /// <summary>
+    /// Resolve a logical PPT path (e.g. /slide[1]/table[1]/tr[2]) to the actual OpenXML element.
+    /// Returns null if the path doesn't contain logical segments that need resolving.
+    /// </summary>
+    private (SlidePart slidePart, OpenXmlElement element)? ResolveLogicalPath(string path)
+    {
+        // /slide[N]/table[M]...
+        var tblPathMatch = Regex.Match(path, @"^/slide\[(\d+)\]/table\[(\d+)\](.*)$");
+        if (tblPathMatch.Success)
+        {
+            var slideIdx = int.Parse(tblPathMatch.Groups[1].Value);
+            var tblIdx = int.Parse(tblPathMatch.Groups[2].Value);
+            var rest = tblPathMatch.Groups[3].Value; // e.g. /tr[1]/tc[2]/txBody
+
+            var (slidePart, table) = ResolveTable(slideIdx, tblIdx);
+            OpenXmlElement current = table;
+
+            if (!string.IsNullOrEmpty(rest))
+            {
+                var segments = GenericXmlQuery.ParsePathSegments(rest);
+                var target = GenericXmlQuery.NavigateByPath(current, segments);
+                if (target != null) current = target;
+                else throw new ArgumentException($"Element not found: {path}");
+            }
+            return (slidePart, current);
+        }
+
+        // /slide[N]/placeholder[X]...
+        var phPathMatch = Regex.Match(path, @"^/slide\[(\d+)\]/placeholder\[(\w+)\](.*)$");
+        if (phPathMatch.Success)
+        {
+            var slideIdx = int.Parse(phPathMatch.Groups[1].Value);
+            var phId = phPathMatch.Groups[2].Value;
+            var rest = phPathMatch.Groups[3].Value;
+
+            var slideParts = GetSlideParts().ToList();
+            if (slideIdx < 1 || slideIdx > slideParts.Count)
+                throw new ArgumentException($"Slide {slideIdx} not found");
+            var slidePart = slideParts[slideIdx - 1];
+            OpenXmlElement current = ResolvePlaceholderShape(slidePart, phId);
+
+            if (!string.IsNullOrEmpty(rest))
+            {
+                var segments = GenericXmlQuery.ParsePathSegments(rest);
+                var target = GenericXmlQuery.NavigateByPath(current, segments);
+                if (target != null) current = target;
+                else throw new ArgumentException($"Element not found: {path}");
+            }
+            return (slidePart, current);
+        }
+
+        return null;
+    }
+
+    private static PlaceholderValues? ParsePlaceholderType(string name)
+    {
+        return name.ToLowerInvariant() switch
+        {
+            "title" => PlaceholderValues.Title,
+            "centertitle" or "centeredtitle" or "ctitle" => PlaceholderValues.CenteredTitle,
+            "body" or "content" => PlaceholderValues.Body,
+            "subtitle" or "sub" => PlaceholderValues.SubTitle,
+            "date" or "datetime" or "dt" => PlaceholderValues.DateAndTime,
+            "footer" => PlaceholderValues.Footer,
+            "slidenum" or "slidenumber" or "sldnum" => PlaceholderValues.SlideNumber,
+            "object" or "obj" => PlaceholderValues.Object,
+            "chart" => PlaceholderValues.Chart,
+            "table" => PlaceholderValues.Table,
+            "clipart" => PlaceholderValues.ClipArt,
+            "diagram" or "dgm" => PlaceholderValues.Diagram,
+            "media" => PlaceholderValues.Media,
+            "picture" or "pic" => PlaceholderValues.Picture,
+            "header" => PlaceholderValues.Header,
+            _ => null
+        };
+    }
+
+    private Shape ResolvePlaceholderShape(SlidePart slidePart, string phId)
+    {
+        var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree
+            ?? throw new ArgumentException("Slide has no shape tree");
+
+        // Try numeric index first
+        if (int.TryParse(phId, out var numIdx))
+        {
+            // Match by placeholder index
+            var byIndex = shapeTree.Elements<Shape>()
+                .FirstOrDefault(s =>
+                {
+                    var ph = s.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                        ?.GetFirstChild<PlaceholderShape>();
+                    return ph?.Index?.Value == (uint)numIdx;
+                });
+            if (byIndex != null) return byIndex;
+
+            // Also try as 1-based ordinal of all placeholders
+            var allPh = shapeTree.Elements<Shape>()
+                .Where(s => s.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                    ?.GetFirstChild<PlaceholderShape>() != null).ToList();
+            if (numIdx >= 1 && numIdx <= allPh.Count)
+                return allPh[numIdx - 1];
+
+            throw new ArgumentException($"Placeholder index {numIdx} not found");
+        }
+
+        // Try by type name
+        var phType = ParsePlaceholderType(phId)
+            ?? throw new ArgumentException($"Unknown placeholder type: '{phId}'. " +
+                "Known types: title, body, subtitle, date, footer, slidenum, object, picture, centerTitle");
+
+        var byType = shapeTree.Elements<Shape>()
+            .FirstOrDefault(s =>
+            {
+                var ph = s.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                    ?.GetFirstChild<PlaceholderShape>();
+                return ph?.Type?.Value == phType;
+            });
+
+        if (byType != null) return byType;
+
+        // Check layout for inherited placeholders and create one on the slide
+        var layoutPart = slidePart.SlideLayoutPart;
+        if (layoutPart?.SlideLayout?.CommonSlideData?.ShapeTree != null)
+        {
+            var layoutShape = layoutPart.SlideLayout.CommonSlideData.ShapeTree.Elements<Shape>()
+                .FirstOrDefault(s =>
+                {
+                    var ph = s.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                        ?.GetFirstChild<PlaceholderShape>();
+                    return ph?.Type?.Value == phType;
+                });
+
+            if (layoutShape != null)
+            {
+                // Clone from layout and add to slide
+                var newShape = (Shape)layoutShape.CloneNode(true);
+                // Clear any text content from layout placeholder
+                if (newShape.TextBody != null)
+                {
+                    newShape.TextBody.RemoveAllChildren<Drawing.Paragraph>();
+                    newShape.TextBody.Append(new Drawing.Paragraph(
+                        new Drawing.EndParagraphRunProperties { Language = "zh-CN" }));
+                }
+                shapeTree.AppendChild(newShape);
+                return newShape;
+            }
+        }
+
+        throw new ArgumentException($"Placeholder '{phId}' not found on slide or its layout");
+    }
+
+    private DocumentNode GetPlaceholderNode(SlidePart slidePart, int slideIdx, int phIdx, int depth)
+    {
+        var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree
+            ?? throw new ArgumentException("Slide has no shape tree");
+
+        // Get all placeholders on slide
+        var placeholders = shapeTree.Elements<Shape>()
+            .Where(s => s.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                ?.GetFirstChild<PlaceholderShape>() != null).ToList();
+
+        if (phIdx < 1 || phIdx > placeholders.Count)
+            throw new ArgumentException($"Placeholder {phIdx} not found (total: {placeholders.Count})");
+
+        var shape = placeholders[phIdx - 1];
+        var ph = shape.NonVisualShapeProperties!.ApplicationNonVisualDrawingProperties!
+            .GetFirstChild<PlaceholderShape>()!;
+
+        var node = ShapeToNode(shape, slideIdx, phIdx, depth);
+        node.Path = $"/slide[{slideIdx}]/placeholder[{phIdx}]";
+        node.Type = "placeholder";
+        if (ph.Type?.HasValue == true) node.Format["phType"] = ph.Type.InnerText;
+        if (ph.Index?.HasValue == true) node.Format["phIndex"] = ph.Index.Value;
+        return node;
+    }
+
+
 
     private static List<Drawing.Run> GetAllRuns(Shape shape)
     {
@@ -815,6 +1445,26 @@ public class PowerPointHandler : IDocumentHandler
                         }
                     }
                     break;
+
+                case "fill":
+                {
+                    var spPr = shape.ShapeProperties;
+                    if (spPr == null) { unsupported.Add(key); break; }
+                    ApplyShapeFill(spPr, value);
+                    break;
+                }
+
+                case "preset":
+                {
+                    var spPr = shape.ShapeProperties;
+                    if (spPr == null) { unsupported.Add(key); break; }
+                    var existingGeom = spPr.GetFirstChild<Drawing.PresetGeometry>();
+                    if (existingGeom != null)
+                        existingGeom.Preset = ParsePresetShape(value);
+                    else
+                        spPr.AppendChild(new Drawing.PresetGeometry(new Drawing.AdjustValueList()) { Preset = ParsePresetShape(value) });
+                    break;
+                }
 
                 case "x" or "y" or "width" or "height":
                 {
@@ -995,6 +1645,12 @@ public class PowerPointHandler : IDocumentHandler
                     }
                 }
 
+                // Shape fill
+                if (properties.TryGetValue("fill", out var fillVal))
+                {
+                    ApplyShapeFill(newShape.ShapeProperties!, fillVal);
+                }
+
                 // Position and size (in EMU, 1cm = 360000 EMU; or parse as cm/in)
                 {
                     long xEmu = 0, yEmu = 0;
@@ -1009,8 +1665,9 @@ public class PowerPointHandler : IDocumentHandler
                         Offset = new Drawing.Offset { X = xEmu, Y = yEmu },
                         Extents = new Drawing.Extents { Cx = cxEmu, Cy = cyEmu }
                     };
+                    var presetName = properties.GetValueOrDefault("preset", "rect");
                     newShape.ShapeProperties.AppendChild(
-                        new Drawing.PresetGeometry(new Drawing.AdjustValueList()) { Preset = Drawing.ShapeTypeValues.Rectangle }
+                        new Drawing.PresetGeometry(new Drawing.AdjustValueList()) { Preset = ParsePresetShape(presetName) }
                     );
                 }
 
@@ -1110,6 +1767,87 @@ public class PowerPointHandler : IDocumentHandler
                 return $"/slide[{imgSlideIdx}]/picture[{picCount}]";
             }
 
+            case "table":
+            {
+                var tblSlideMatch = Regex.Match(parentPath, @"^/slide\[(\d+)\]$");
+                if (!tblSlideMatch.Success)
+                    throw new ArgumentException("Tables must be added to a slide: /slide[N]");
+
+                var tblSlideIdx = int.Parse(tblSlideMatch.Groups[1].Value);
+                var tblSlideParts = GetSlideParts().ToList();
+                if (tblSlideIdx < 1 || tblSlideIdx > tblSlideParts.Count)
+                    throw new ArgumentException($"Slide {tblSlideIdx} not found");
+
+                var tblSlidePart = tblSlideParts[tblSlideIdx - 1];
+                var tblShapeTree = GetSlide(tblSlidePart).CommonSlideData?.ShapeTree
+                    ?? throw new InvalidOperationException("Slide has no shape tree");
+
+                int rows = int.Parse(properties.GetValueOrDefault("rows", "3"));
+                int cols = int.Parse(properties.GetValueOrDefault("cols", "3"));
+                if (rows < 1 || cols < 1)
+                    throw new ArgumentException("rows and cols must be >= 1");
+
+                // Position & size
+                long tblX = properties.TryGetValue("x", out var txStr) ? ParseEmu(txStr) : 457200; // ~1.27cm
+                long tblY = properties.TryGetValue("y", out var tyStr) ? ParseEmu(tyStr) : 1600200; // ~4.44cm
+                long tblCx = properties.TryGetValue("width", out var twStr) ? ParseEmu(twStr) : 8229600; // ~22.86cm
+                long tblCy = properties.TryGetValue("height", out var thStr) ? ParseEmu(thStr) : (long)(rows * 370840); // ~1.03cm per row
+                long colWidth = tblCx / cols;
+                long rowHeight = tblCy / rows;
+
+                var tblId = (uint)(tblShapeTree.ChildElements.Count + 2);
+
+                // Build GraphicFrame
+                var graphicFrame = new GraphicFrame();
+                graphicFrame.NonVisualGraphicFrameProperties = new NonVisualGraphicFrameProperties(
+                    new NonVisualDrawingProperties { Id = tblId, Name = properties.GetValueOrDefault("name", $"Table {tblId}") },
+                    new NonVisualGraphicFrameDrawingProperties(),
+                    new ApplicationNonVisualDrawingProperties()
+                );
+                graphicFrame.Transform = new Transform(
+                    new Drawing.Offset { X = tblX, Y = tblY },
+                    new Drawing.Extents { Cx = tblCx, Cy = tblCy }
+                );
+
+                // Build table
+                var table = new Drawing.Table();
+                var tblProps = new Drawing.TableProperties { FirstRow = true, BandRow = true };
+                table.Append(tblProps);
+
+                var tableGrid = new Drawing.TableGrid();
+                for (int c = 0; c < cols; c++)
+                    tableGrid.Append(new Drawing.GridColumn { Width = colWidth });
+                table.Append(tableGrid);
+
+                for (int r = 0; r < rows; r++)
+                {
+                    var tableRow = new Drawing.TableRow { Height = rowHeight };
+                    for (int c = 0; c < cols; c++)
+                    {
+                        var cell = new Drawing.TableCell();
+                        cell.Append(new Drawing.TextBody(
+                            new Drawing.BodyProperties(),
+                            new Drawing.ListStyle(),
+                            new Drawing.Paragraph(new Drawing.EndParagraphRunProperties { Language = "zh-CN" })
+                        ));
+                        cell.Append(new Drawing.TableCellProperties());
+                        tableRow.Append(cell);
+                    }
+                    table.Append(tableRow);
+                }
+
+                var graphic = new Drawing.Graphic(
+                    new Drawing.GraphicData(table) { Uri = "http://schemas.openxmlformats.org/drawingml/2006/table" }
+                );
+                graphicFrame.Append(graphic);
+                tblShapeTree.AppendChild(graphicFrame);
+                GetSlide(tblSlidePart).Save();
+
+                var tblCount = tblShapeTree.Elements<GraphicFrame>()
+                    .Count(gf => gf.Descendants<Drawing.Table>().Any());
+                return $"/slide[{tblSlideIdx}]/table[{tblCount}]";
+            }
+
             case "equation" or "formula" or "math":
             {
                 if (!properties.TryGetValue("formula", out var eqFormula))
@@ -1189,23 +1927,36 @@ public class PowerPointHandler : IDocumentHandler
 
             default:
             {
-                // Generic fallback: create typed element via SDK schema validation
-                var allSegments = GenericXmlQuery.ParsePathSegments(parentPath);
-                if (allSegments.Count == 0 || !allSegments[0].Name.Equals("slide", StringComparison.OrdinalIgnoreCase) || !allSegments[0].Index.HasValue)
-                    throw new ArgumentException($"Generic add requires a path starting with /slide[N]: {parentPath}");
+                // Try resolving logical paths (table/placeholder) first
+                var logicalResult = ResolveLogicalPath(parentPath);
+                SlidePart fbSlidePart;
+                OpenXmlElement fbParent;
 
-                var fbSlideIdx = allSegments[0].Index!.Value;
-                var fbSlideParts = GetSlideParts().ToList();
-                if (fbSlideIdx < 1 || fbSlideIdx > fbSlideParts.Count)
-                    throw new ArgumentException($"Slide {fbSlideIdx} not found");
-
-                var fbSlidePart = fbSlideParts[fbSlideIdx - 1];
-                OpenXmlElement fbParent = GetSlide(fbSlidePart);
-                var remaining = allSegments.Skip(1).ToList();
-                if (remaining.Count > 0)
+                if (logicalResult.HasValue)
                 {
-                    fbParent = GenericXmlQuery.NavigateByPath(fbParent, remaining)
-                        ?? throw new ArgumentException($"Parent element not found: {parentPath}");
+                    fbSlidePart = logicalResult.Value.slidePart;
+                    fbParent = logicalResult.Value.element;
+                }
+                else
+                {
+                    // Generic fallback: navigate by XML localName
+                    var allSegments = GenericXmlQuery.ParsePathSegments(parentPath);
+                    if (allSegments.Count == 0 || !allSegments[0].Name.Equals("slide", StringComparison.OrdinalIgnoreCase) || !allSegments[0].Index.HasValue)
+                        throw new ArgumentException($"Generic add requires a path starting with /slide[N]: {parentPath}");
+
+                    var fbSlideIdx = allSegments[0].Index!.Value;
+                    var fbSlideParts = GetSlideParts().ToList();
+                    if (fbSlideIdx < 1 || fbSlideIdx > fbSlideParts.Count)
+                        throw new ArgumentException($"Slide {fbSlideIdx} not found");
+
+                    fbSlidePart = fbSlideParts[fbSlideIdx - 1];
+                    fbParent = GetSlide(fbSlidePart);
+                    var remaining = allSegments.Skip(1).ToList();
+                    if (remaining.Count > 0)
+                    {
+                        fbParent = GenericXmlQuery.NavigateByPath(fbParent, remaining)
+                            ?? throw new ArgumentException($"Parent element not found: {parentPath}");
+                    }
                 }
 
                 var created = GenericXmlQuery.TryCreateTypedElement(fbParent, type, properties, index);
@@ -1876,6 +2627,16 @@ public class PowerPointHandler : IDocumentHandler
             shapeIdx++;
         }
 
+        int tblIdx = 0;
+        foreach (var gf in shapeTree.Elements<GraphicFrame>())
+        {
+            if (gf.Descendants<Drawing.Table>().Any())
+            {
+                tblIdx++;
+                children.Add(TableToNode(gf, slideNum, tblIdx, depth));
+            }
+        }
+
         int picIdx = 0;
         foreach (var pic in shapeTree.Elements<Picture>())
         {
@@ -1884,6 +2645,81 @@ public class PowerPointHandler : IDocumentHandler
         }
 
         return children;
+    }
+
+    private static DocumentNode TableToNode(GraphicFrame gf, int slideNum, int tblIdx, int depth)
+    {
+        var table = gf.Descendants<Drawing.Table>().First();
+        var rows = table.Elements<Drawing.TableRow>().ToList();
+        var cols = rows.FirstOrDefault()?.Elements<Drawing.TableCell>().Count() ?? 0;
+        var name = gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties?.Name?.Value ?? "Table";
+
+        var node = new DocumentNode
+        {
+            Path = $"/slide[{slideNum}]/table[{tblIdx}]",
+            Type = "table",
+            Preview = $"{name} ({rows.Count}x{cols})",
+            ChildCount = rows.Count
+        };
+
+        node.Format["name"] = name;
+        node.Format["rows"] = rows.Count;
+        node.Format["cols"] = cols;
+
+        // Position
+        var offset = gf.Transform?.Offset;
+        if (offset != null)
+        {
+            if (offset.X is not null) node.Format["x"] = FormatEmu(offset.X!);
+            if (offset.Y is not null) node.Format["y"] = FormatEmu(offset.Y!);
+        }
+        var extents = gf.Transform?.Extents;
+        if (extents != null)
+        {
+            if (extents.Cx is not null) node.Format["width"] = FormatEmu(extents.Cx!);
+            if (extents.Cy is not null) node.Format["height"] = FormatEmu(extents.Cy!);
+        }
+
+        if (depth > 0)
+        {
+            int rIdx = 0;
+            foreach (var row in rows)
+            {
+                rIdx++;
+                var rowNode = new DocumentNode
+                {
+                    Path = $"/slide[{slideNum}]/table[{tblIdx}]/tr[{rIdx}]",
+                    Type = "tr",
+                    ChildCount = row.Elements<Drawing.TableCell>().Count()
+                };
+
+                if (depth > 1)
+                {
+                    int cIdx = 0;
+                    foreach (var cell in row.Elements<Drawing.TableCell>())
+                    {
+                        cIdx++;
+                        var cellText = cell.TextBody?.InnerText ?? "";
+                        var cellNode = new DocumentNode
+                        {
+                            Path = $"/slide[{slideNum}]/table[{tblIdx}]/tr[{rIdx}]/tc[{cIdx}]",
+                            Type = "tc",
+                            Text = cellText
+                        };
+
+                        // Cell fill
+                        var tcPr = cell.TableCellProperties ?? cell.GetFirstChild<Drawing.TableCellProperties>();
+                        var cellFillHex = tcPr?.GetFirstChild<Drawing.SolidFill>()?.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
+                        if (cellFillHex != null) cellNode.Format["fill"] = cellFillHex;
+
+                        rowNode.Children.Add(cellNode);
+                    }
+                }
+                node.Children.Add(rowNode);
+            }
+        }
+
+        return node;
     }
 
     private static DocumentNode ShapeToNode(Shape shape, int slideNum, int shapeIdx, int depth)
@@ -1918,6 +2754,17 @@ public class PowerPointHandler : IDocumentHandler
                 if (xfrm.Extents.Cy is not null) node.Format["height"] = FormatEmu(xfrm.Extents.Cy!);
             }
         }
+
+        // Shape fill
+        var shapeFill = shape.ShapeProperties?.GetFirstChild<Drawing.SolidFill>();
+        var shapeFillHex = shapeFill?.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
+        if (shapeFillHex != null) node.Format["fill"] = shapeFillHex;
+        if (shape.ShapeProperties?.GetFirstChild<Drawing.NoFill>() != null) node.Format["fill"] = "none";
+
+        // Shape preset
+        var presetGeom = shape.ShapeProperties?.GetFirstChild<Drawing.PresetGeometry>();
+        if (presetGeom?.Preset?.HasValue == true)
+            node.Format["preset"] = presetGeom.Preset.InnerText;
 
         // Collect font info
         var firstRun = shape.TextBody?.Descendants<Drawing.Run>().FirstOrDefault();
@@ -2057,7 +2904,8 @@ public class PowerPointHandler : IDocumentHandler
         if (typeMatch.Success)
         {
             var t = typeMatch.Groups[1].Value.ToLowerInvariant();
-            if (t is "shape" or "textbox" or "title" or "picture" or "pic" or "equation" or "math" or "formula")
+            if (t is "shape" or "textbox" or "title" or "picture" or "pic" or "equation" or "math" or "formula"
+                or "table" or "placeholder")
                 elementType = t;
         }
 
@@ -2093,7 +2941,7 @@ public class PowerPointHandler : IDocumentHandler
     private static bool MatchesShapeSelector(Shape shape, ShapeSelector selector)
     {
         // Element type filter
-        if (selector.ElementType is "picture" or "pic")
+        if (selector.ElementType is "picture" or "pic" or "table" or "placeholder")
             return false;
 
         // Title filter
@@ -2154,6 +3002,121 @@ public class PowerPointHandler : IDocumentHandler
         }
 
         return true;
+    }
+
+    private static Drawing.ShapeTypeValues ParsePresetShape(string name)
+    {
+        return name.ToLowerInvariant() switch
+        {
+            "rect" or "rectangle" => Drawing.ShapeTypeValues.Rectangle,
+            "roundrect" or "roundedrectangle" => Drawing.ShapeTypeValues.RoundRectangle,
+            "ellipse" or "oval" => Drawing.ShapeTypeValues.Ellipse,
+            "triangle" => Drawing.ShapeTypeValues.Triangle,
+            "rtriangle" or "righttriangle" => Drawing.ShapeTypeValues.RightTriangle,
+            "diamond" => Drawing.ShapeTypeValues.Diamond,
+            "parallelogram" => Drawing.ShapeTypeValues.Parallelogram,
+            "trapezoid" => Drawing.ShapeTypeValues.Trapezoid,
+            "pentagon" => Drawing.ShapeTypeValues.Pentagon,
+            "hexagon" => Drawing.ShapeTypeValues.Hexagon,
+            "heptagon" => Drawing.ShapeTypeValues.Heptagon,
+            "octagon" => Drawing.ShapeTypeValues.Octagon,
+            "star4" => Drawing.ShapeTypeValues.Star4,
+            "star5" => Drawing.ShapeTypeValues.Star5,
+            "star6" => Drawing.ShapeTypeValues.Star6,
+            "star8" => Drawing.ShapeTypeValues.Star8,
+            "star10" => Drawing.ShapeTypeValues.Star10,
+            "star12" => Drawing.ShapeTypeValues.Star12,
+            "star16" => Drawing.ShapeTypeValues.Star16,
+            "star24" => Drawing.ShapeTypeValues.Star24,
+            "star32" => Drawing.ShapeTypeValues.Star32,
+            "rightarrow" or "rarrow" => Drawing.ShapeTypeValues.RightArrow,
+            "leftarrow" or "larrow" => Drawing.ShapeTypeValues.LeftArrow,
+            "uparrow" => Drawing.ShapeTypeValues.UpArrow,
+            "downarrow" => Drawing.ShapeTypeValues.DownArrow,
+            "leftrightarrow" or "lrarrow" => Drawing.ShapeTypeValues.LeftRightArrow,
+            "updownarrow" or "udarrow" => Drawing.ShapeTypeValues.UpDownArrow,
+            "chevron" => Drawing.ShapeTypeValues.Chevron,
+            "homeplat" or "homeplate" => Drawing.ShapeTypeValues.HomePlate,
+            "plus" or "cross" => Drawing.ShapeTypeValues.Plus,
+            "heart" => Drawing.ShapeTypeValues.Heart,
+            "cloud" => Drawing.ShapeTypeValues.Cloud,
+            "lightning" or "lightningbolt" => Drawing.ShapeTypeValues.LightningBolt,
+            "sun" => Drawing.ShapeTypeValues.Sun,
+            "moon" => Drawing.ShapeTypeValues.Moon,
+            "arc" => Drawing.ShapeTypeValues.Arc,
+            "donut" => Drawing.ShapeTypeValues.Donut,
+            "nosmoking" or "blockarc" => Drawing.ShapeTypeValues.NoSmoking,
+            "cube" => Drawing.ShapeTypeValues.Cube,
+            "can" or "cylinder" => Drawing.ShapeTypeValues.Can,
+            "line" => Drawing.ShapeTypeValues.Line,
+            "decagon" => Drawing.ShapeTypeValues.Decagon,
+            "dodecagon" => Drawing.ShapeTypeValues.Dodecagon,
+            "ribbon" => Drawing.ShapeTypeValues.Ribbon,
+            "ribbon2" => Drawing.ShapeTypeValues.Ribbon2,
+            "callout1" => Drawing.ShapeTypeValues.Callout1,
+            "callout2" => Drawing.ShapeTypeValues.Callout2,
+            "callout3" => Drawing.ShapeTypeValues.Callout3,
+            "wedgeroundrectcallout" or "callout" => Drawing.ShapeTypeValues.WedgeRoundRectangleCallout,
+            "wedgeellipsecallout" => Drawing.ShapeTypeValues.WedgeEllipseCallout,
+            "cloudcallout" => Drawing.ShapeTypeValues.CloudCallout,
+            "flowchartprocess" or "process" => Drawing.ShapeTypeValues.FlowChartProcess,
+            "flowchartdecision" or "decision" => Drawing.ShapeTypeValues.FlowChartDecision,
+            "flowchartterminator" or "terminator" => Drawing.ShapeTypeValues.FlowChartTerminator,
+            "flowchartdocument" => Drawing.ShapeTypeValues.FlowChartDocument,
+            "flowchartinputoutput" or "io" => Drawing.ShapeTypeValues.FlowChartInputOutput,
+            "brace" or "leftbrace" => Drawing.ShapeTypeValues.LeftBrace,
+            "rightbrace" => Drawing.ShapeTypeValues.RightBrace,
+            "leftbracket" => Drawing.ShapeTypeValues.LeftBracket,
+            "rightbracket" => Drawing.ShapeTypeValues.RightBracket,
+            "smileyface" or "smiley" => Drawing.ShapeTypeValues.SmileyFace,
+            "foldedcorner" => Drawing.ShapeTypeValues.FoldedCorner,
+            "frame" => Drawing.ShapeTypeValues.Frame,
+            "gear6" => Drawing.ShapeTypeValues.Gear6,
+            "gear9" => Drawing.ShapeTypeValues.Gear9,
+            "notchedrightarrow" => Drawing.ShapeTypeValues.NotchedRightArrow,
+            "bentuparrow" => Drawing.ShapeTypeValues.BentUpArrow,
+            "curvedrightarrow" => Drawing.ShapeTypeValues.CurvedRightArrow,
+            "stripedrightarrow" => Drawing.ShapeTypeValues.StripedRightArrow,
+            "uturnArrow" => Drawing.ShapeTypeValues.UTurnArrow,
+            "circularArrow" => Drawing.ShapeTypeValues.CircularArrow,
+            _ => throw new ArgumentException(
+                $"Unknown preset shape: '{name}'. Common presets: rect, roundRect, ellipse, triangle, diamond, " +
+                "pentagon, hexagon, star5, rightArrow, leftArrow, chevron, plus, heart, cloud, cube, can, line, " +
+                "callout, process, decision, smiley, frame, gear6")
+        };
+    }
+
+    private static void ApplyShapeFill(ShapeProperties spPr, string value)
+    {
+        // Remove any existing fill
+        spPr.RemoveAllChildren<Drawing.SolidFill>();
+        spPr.RemoveAllChildren<Drawing.NoFill>();
+        spPr.RemoveAllChildren<Drawing.GradientFill>();
+        spPr.RemoveAllChildren<Drawing.PatternFill>();
+
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            var noFill = new Drawing.NoFill();
+            if (spPr is OpenXmlCompositeElement composite)
+            {
+                if (!composite.AddChild(noFill, throwOnError: false))
+                    spPr.PrependChild(noFill);
+            }
+            else
+                spPr.PrependChild(noFill);
+        }
+        else
+        {
+            var solidFill = new Drawing.SolidFill();
+            solidFill.Append(new Drawing.RgbColorModelHex { Val = value.TrimStart('#').ToUpperInvariant() });
+            if (spPr is OpenXmlCompositeElement composite)
+            {
+                if (!composite.AddChild(solidFill, throwOnError: false))
+                    spPr.PrependChild(solidFill);
+            }
+            else
+                spPr.PrependChild(solidFill);
+        }
     }
 
     private static long ParseEmu(string value)

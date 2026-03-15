@@ -507,6 +507,9 @@ Path system (1-based):
   /slide[N]                  Slide N
   /slide[N]/shape[M]         Shape M on slide N
   /slide[N]/picture[M]       Picture M on slide N
+  /slide[N]/table[M]          Table M on slide N
+  /slide[N]/table[M]/tr[R]/tc[C]  Table cell
+  /slide[N]/placeholder[M]   Placeholder M (by ordinal or type name)
   /slide[N]/shape[M]/run[K]               Run K (flat index across paragraphs)
   /slide[N]/shape[M]/paragraph[P]        Paragraph P in shape
   /slide[N]/shape[M]/paragraph[P]/run[K]  Run K in paragraph P
@@ -524,10 +527,10 @@ Common workflow:
 
 Run 'officecli pptx <command>' for details:
   view    View modes
-  get     Slide/shape navigation
+  get     Slide/shape/table/placeholder navigation
   query   Shape selectors
-  set     Shape property reference
-  add     Slides, shapes, pictures, equations
+  set     Shape/table/placeholder property reference
+  add     Slides, shapes, tables, pictures, equations
   raw     Raw XML parts reference
 """;
 
@@ -564,8 +567,13 @@ PowerPoint (.pptx) — get
 
 Paths:
   /                                          Presentation root (lists slides)
-  /slide[1]                                  Slide 1 (lists shapes)
-  /slide[1]/shape[1]                         Shape details (text, position, size)
+  /slide[1]                                  Slide 1 (lists shapes, tables, placeholders)
+  /slide[1]/shape[1]                         Shape details (text, position, size, fill, preset)
+  /slide[1]/table[1]                         Table details (rows, cols, position)
+  /slide[1]/table[1]/tr[1]                   Table row
+  /slide[1]/table[1]/tr[1]/tc[1]             Table cell
+  /slide[1]/placeholder[1]                   Placeholder by ordinal
+  /slide[1]/placeholder[title]               Placeholder by type name
   /slide[1]/shape[1]/paragraph[1]            Paragraph in shape
   /slide[1]/shape[1]/paragraph[1]/run[1]     Run in paragraph
   /slide[1]/shape[1]/run[1]                  Run shortcut (flat index across paragraphs)
@@ -577,6 +585,8 @@ Examples:
   officecli get pres.pptx / --depth 1
   officecli get pres.pptx '/slide[1]' --depth 2
   officecli get pres.pptx '/slide[1]/shape[1]' --depth 3 --json
+  officecli get pres.pptx '/slide[1]/table[1]' --depth 2
+  officecli get pres.pptx '/slide[1]/placeholder[title]'
   officecli get pres.pptx '/slide[1]/shape[1]/paragraph[1]/run[1]'
   officecli get pres.pptx '/slide[1]/cSld/spTree/sp[1]/spPr' --depth 3
 """;
@@ -590,12 +600,14 @@ Element types:
   title              Title shapes
   picture (pic)      Images
   equation (math, formula)  Mathematical equations
+  table              Tables
+  placeholder        Placeholder shapes (shows phType)
 
 Filters:
   [font="Arial"]     Shapes with specific font
   [font!="Arial"]    Shapes without specific font
   [title=true]       Title shapes only
-  :contains("text")  Shapes containing text (case-insensitive)
+  :contains("text")  Shapes/tables containing text (case-insensitive)
   :no-alt            Pictures without alt text
 
 Scope by slide:
@@ -607,9 +619,11 @@ Examples:
   officecli query pres.pptx 'shape'
   officecli query pres.pptx 'slide[1] shape'
   officecli query pres.pptx 'title'
+  officecli query pres.pptx 'table'
+  officecli query pres.pptx 'table:contains("revenue")'
+  officecli query pres.pptx 'placeholder'
   officecli query pres.pptx 'picture:no-alt'
   officecli query pres.pptx 'shape:contains("hello")'
-  officecli query pres.pptx 'slide[2] shape[font="Arial"]'
   officecli query pres.pptx 'equation'
 """;
 
@@ -625,11 +639,26 @@ Shape properties (/slide[N]/shape[M]) -- applies to all runs:
   size       Font size in points
   bold       true/false
   italic     true/false
-  color      Hex RGB (e.g. FF0000)
+  color      Hex RGB text color (e.g. FF0000)
+  fill       Hex RGB shape fill (e.g. 4472C4) or "none"
+  preset     Shape geometry (e.g. roundRect, ellipse, rightArrow, diamond, star5)
   x          Horizontal position (EMU or cm/in/pt/px, e.g. 2cm)
   y          Vertical position (EMU or cm/in/pt/px, e.g. 3cm)
   width      Shape width (EMU or cm/in/pt/px, e.g. 10cm)
   height     Shape height (EMU or cm/in/pt/px, e.g. 2cm)
+
+Table properties (/slide[N]/table[M]):
+  x, y, width, height, name
+
+Table row properties (/slide[N]/table[M]/tr[R]):
+  height; other props apply to all cells in the row
+
+Table cell properties (/slide[N]/table[M]/tr[R]/tc[C]):
+  text, font, size, bold, italic, color, fill, align
+
+Placeholder properties (/slide[N]/placeholder[M] or /slide[N]/placeholder[type]):
+  Same as shape properties. Types: title, body, subtitle, date, footer, slidenum
+  If placeholder not on slide, it is auto-created from layout.
 
 Paragraph properties (/slide[N]/shape[M]/paragraph[P]):
   align      left (l), center (c), right (r), justify (j)
@@ -643,8 +672,12 @@ Any XML attribute is settable via element path (find paths with get --depth N):
 
 Examples:
   officecli set pres.pptx '/slide[1]/shape[1]' --prop text="New Title" --prop font=Arial
-  officecli set pres.pptx '/slide[1]/shape[1]' --prop bold=true --prop size=24 --prop color=FFFFFF
+  officecli set pres.pptx '/slide[1]/shape[1]' --prop fill=4472C4 --prop preset=roundRect
   officecli set pres.pptx '/slide[1]/shape[1]' --prop x=2cm --prop y=3cm --prop width=10cm --prop height=2cm
+  officecli set pres.pptx '/slide[1]/table[1]' --prop x=2cm --prop y=3cm --prop width=20cm
+  officecli set pres.pptx '/slide[1]/table[1]/tr[1]' --prop bold=true --prop fill=4472C4
+  officecli set pres.pptx '/slide[1]/table[1]/tr[1]/tc[1]' --prop text="Header" --prop bold=true --prop fill=4472C4
+  officecli set pres.pptx '/slide[1]/placeholder[title]' --prop text="My Title"
   officecli set pres.pptx '/slide[1]/shape[2]/paragraph[1]' --prop align=center
 """;
 
@@ -658,8 +691,15 @@ Types and properties:
     title (optional), text (optional)
 
   shape (textbox)  -- parent: /slide[N]
-    text, name, font, size, bold, italic, color,
+    text, name, font, size, bold, italic, color, fill,
+    preset (shape geometry: rect, roundRect, ellipse, triangle, diamond, pentagon, hexagon,
+            star5, rightArrow, leftArrow, chevron, plus, heart, cloud, cube, can, line,
+            callout, process, decision, smiley, frame, gear6, ...),
     x, y, width, height (EMU or cm/in/pt/px, default: full-width text box)
+
+  table  -- parent: /slide[N]
+    rows (default 3), cols (default 3), name,
+    x, y, width, height (EMU or cm/in/pt/px)
 
   picture (image, img)  -- parent: /slide[N]
     path (required), name, alt, width, height, x, y
@@ -674,7 +714,8 @@ Types and properties:
 Examples:
   officecli add pres.pptx / --type slide --prop title="Agenda" --prop text="Topics for today"
   officecli add pres.pptx '/slide[1]' --type shape --prop text="Hello" --prop font=Arial --prop size=18
-  officecli add pres.pptx '/slide[1]' --type shape --prop text="Box" --prop x=2cm --prop y=3cm --prop width=10cm --prop height=2cm
+  officecli add pres.pptx '/slide[1]' --type shape --prop text="Go" --prop preset=rightArrow --prop fill=4472C4
+  officecli add pres.pptx '/slide[1]' --type table --prop rows=3 --prop cols=4
   officecli add pres.pptx '/slide[1]' --type picture --prop path=photo.jpg --prop width=8cm --prop alt="Team photo"
   officecli add pres.pptx '/slide[1]' --type equation --prop formula="\frac{-b \pm \sqrt{b^2-4ac}}{2a}"
   officecli add pres.pptx / --from '/slide[1]' --index 0

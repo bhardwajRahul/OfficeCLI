@@ -33,15 +33,15 @@ irm https://raw.githubusercontent.com/iOfficeAI/OfficeCli/main/install.ps1 | iex
 ```bash
 officecli create <file>          # create blank .docx/.xlsx/.pptx (type inferred from extension)
 officecli view <file> outline|stats|issues|text|annotated [--start N --end N] [--max-lines N] [--cols A,B]
-officecli get <file> '/body/p[3]' --depth 2 [--json]
+officecli get <file> '<path>' --depth 2 [--json]
 officecli query <file> 'paragraph[style=Normal] > run[font!=宋体]'
 ```
 
-**get** supports any XML path via element localName: `/body/tbl[1]/tblPr`, `/Sheet1/sheetViews/sheetView[1]`, `/slide[1]/cSld/spTree/sp[1]/nvSpPr`. Use `--depth N` to expand children.
+**get paths:** Any XML localName works. Common paths: `/body/p[3]`, `/Sheet1/A1`, `/slide[1]/shape[1]`, `/slide[1]/table[1]/tr[1]/tc[1]`, `/slide[1]/placeholder[title]`. Use `--depth N` to expand children.
 
 **view modes:** `outline` (structure), `stats` (statistics with style inheritance), `issues` (`--type format|content|structure`, `--limit N`), `text` (plain with line numbers), `annotated` (with formatting)
 
-**query selectors:** `[attr=value]`, `[attr!=value]`, `:contains("text")`, `:empty`, `:has(formula)`, `:no-alt`. Built-in types: `paragraph`, `run`, `picture`, `equation`, `cell`, `table`. Falls back to generic XML element name (e.g. `wsp`, `a:ln`, `srgbClr[val=0070C0]`).
+**query selectors:** `[attr=value]`, `[attr!=value]`, `:contains("text")`, `:empty`, `:has(formula)`, `:no-alt`. Built-in types: `paragraph`, `run`, `picture`, `equation`, `cell`, `table`, `placeholder`. Falls back to generic XML element name (e.g. `wsp`, `a:ln`, `srgbClr[val=0070C0]`).
 
 For large documents, ALWAYS use `--max-lines` or `--start`/`--end` to limit output.
 
@@ -51,22 +51,7 @@ For large documents, ALWAYS use `--max-lines` or `--start`/`--end` to limit outp
 
 ### set — `officecli set <file> <path> --prop key=value [--prop ...]`
 
-The table below lists shortcut properties for common paths. Word run/paragraph/table props also accept any valid OpenXML child element name (validated via SDK type system).
-
-**Any XML attribute is settable via element path:** `set` also works on **any** XML element path (found via `get --depth N`) with **any** XML attribute name — even attributes not currently present on the element. Use this before reaching for L3.
-
-Examples (not exhaustive — shortcut properties from the table below and any XML attribute are all settable):
-
-```bash
-# Example: set PPT shape position and size via element path
-officecli get doc.pptx '/slide[1]/cSld/spTree/sp[1]/spPr' --depth 3
-officecli set doc.pptx '/slide[1]/cSld/spTree/sp[1]/spPr/xfrm[1]/off[1]' --prop x=1500000 --prop y=300000
-officecli set doc.pptx '/slide[1]/cSld/spTree/sp[1]/spPr/xfrm[1]/ext[1]' --prop cx=9192000 --prop cy=900000
-# Example: set PPT text color (simple)
-officecli set doc.pptx '/slide[1]/shape[1]' --prop color=FFFFFF
-# Example: set PPT text color via element path (when you need per-run control)
-officecli set doc.pptx '/slide[1]/cSld/spTree/sp[1]/txBody/p[1]/r[1]/rPr[1]/solidFill[1]/srgbClr[1]' --prop val=FFFFFF
-```
+**Any XML attribute is settable via element path** (found via `get --depth N`) — even attributes not currently present. Use this before reaching for L3.
 
 | Target | Path example | Properties |
 |--------|-------------|------------|
@@ -78,42 +63,33 @@ officecli set doc.pptx '/slide[1]/cSld/spTree/sp[1]/txBody/p[1]/r[1]/rPr[1]/soli
 | Word table | `/body/tbl[1]` | `alignment`, `width`, ... |
 | Word document | `/` | `defaultFont`, `pageBackground`, `pageWidth`, `pageHeight`, `marginTop/Bottom/Left/Right`, ... |
 | Excel cell | `/Sheet1/A1` | `value`, `formula`, `clear`, `font.bold/italic/strike/underline/color/size/name`, `fill`(hex RGB), `alignment.horizontal/vertical/wrapText`, `numFmt`, ... |
-| PPT shape | `/slide[1]/shape[1]` | `text`, `font`, `size`, `bold`, `italic`, `color`, ... |
+| PPT shape | `/slide[1]/shape[1]` | `text`, `font`, `size`, `bold`, `italic`, `color`, `fill`(hex RGB or "none"), `preset`(shape geometry), `x`, `y`, `width`, `height`, ... |
+| PPT table | `/slide[1]/table[1]` | `x`, `y`, `width`, `height`, `name`, ... |
+| PPT table row | `/slide[1]/table[1]/tr[1]` | `height`; other props (text, bold, fill, ...) apply to all cells in row |
+| PPT table cell | `/slide[1]/table[1]/tr[1]/tc[1]` | `text`, `font`, `size`, `bold`, `italic`, `color`, `fill`, `align`, ... |
+| PPT placeholder | `/slide[1]/placeholder[title]` | Same as shape. Types: `title`, `body`, `subtitle`, `date`, `footer`, `slidenum`. Auto-created from layout if missing. |
 
 Composite props (`pBdr`, `tabs`, `lang`, `bdr`) → use L3 (`raw-set --action setattr`).
 
 ### add — `officecli add <file> <parent> --type <type> [--index N] [--prop ...]` or `--from <path>`
 
-Props listed are common examples, not exhaustive — most `set` shortcut properties also work with `add`:
-
 | Format | Types & props |
 |--------|--------------|
 | Word | `paragraph`(text,font,size,bold,style,alignment,...), `run`(text,font,size,bold,italic,...), `table`(rows,cols), `picture`(path,width,height,alt,...), `equation`(formula,mode), `comment`(text,author,initials,date,...) |
 | Excel | `sheet`(name), `row`(cols), `cell`(ref,value,formula,...), `databar`(sqref,min,max,color,...) |
-| PPT | `slide`(title,text,...), `shape`(text,font,size,name,...), `picture`(path,width,height,x,y,...), `equation`(formula) |
+| PPT | `slide`(title,text), `shape`(text,font,size,name,preset,fill,x,y,width,height), `table`(rows,cols,x,y,width,height), `picture`(path,width,height,x,y,alt), `equation`(formula) |
 
-Dimensions: raw EMU or suffixed `cm`/`in`/`pt`/`px`. Equation formula: LaTeX subset (`\frac{}{}`, `\sqrt{}`, `^{}`, `_{}`, `\sum`, Greek letters). Mode: `display`(default) or `inline`. Comment parent can be a paragraph (`/body/p[N]`) or a specific run (`/body/p[N]/r[M]`) for precise marking.
-
-**Copy from existing element:** `officecli add <file> <parent> --from <path> [--index N]` — clones the element at `<path>` into `<parent>`. Cross-part relationships (e.g., images across slides) are handled automatically. Either `--type` or `--from` is required, not both.
+Dimensions: raw EMU or suffixed `cm`/`in`/`pt`/`px`. Equation formula: LaTeX subset. `--from <path>` clones an existing element (cross-part relationships handled automatically).
 
 ### move — `officecli move <file> <path> [--to <parent>] [--index N]`
 
-Move an element to a new position. If `--to` is omitted, reorders within the current parent. Cross-part relationships (e.g., images across slides) are handled automatically.
-
-```bash
-officecli move doc.pptx '/slide[3]' --index 0              # reorder slide to first
-officecli move doc.pptx '/slide[1]/picture[1]' --to '/slide[1]' --index 0  # picture to back (z-order)
-officecli move doc.pptx '/slide[1]/shape[2]' --to '/slide[2]'  # move shape across slides
-officecli move doc.docx '/body/p[5]' --index 0              # move paragraph to first
-```
-
-### remove — `officecli remove <file> '/body/p[4]'`
+### remove — `officecli remove <file> '<path>'`
 
 ---
 
 ## L3: Raw XML
 
-Use for charts, borders, or any structure L2 cannot express. **No xmlns declarations needed** — prefixes auto-registered: `w`, `a`, `p`, `x`, `r`, `c`, `xdr`, `wp`, `wps`, `mc`, `wp14`, `v`
+Use for charts, borders, or any structure L2 cannot express. **No xmlns needed** — prefixes auto-registered: `w`, `a`, `p`, `x`, `r`, `c`, `xdr`, `wp`, `wps`, `mc`, `wp14`, `v`
 
 ```bash
 officecli raw <file> /document                     # Word: /styles, /numbering, /settings, /header[N], /footer[N]
@@ -124,10 +100,6 @@ officecli raw-set <file> /document --xpath "//w:body/w:p[1]" --action replace --
 officecli add-part <file> /Sheet1 --type chart     # returns relId for use with raw-set
 officecli add-part <file> / --type header|footer   # Word only
 ```
-
-**PPT slides:** Read slide size first (`raw /presentation | grep sldSz`), add via L2, fill via `raw-set`.
-
-**Excel charts:** `add-part` → `raw-set` chart XML → `raw-set` drawing anchor.
 
 ---
 
