@@ -1,0 +1,202 @@
+// Copyright 2025 OfficeCli (officecli.ai)
+// SPDX-License-Identifier: Apache-2.0
+
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Presentation;
+using OfficeCli.Core;
+using Drawing = DocumentFormat.OpenXml.Drawing;
+
+namespace OfficeCli.Handlers;
+
+public partial class PowerPointHandler
+{
+    // ==================== Slide Background ====================
+
+    /// <summary>
+    /// Apply a background to a slide.
+    ///
+    /// Supported values for the "background" property:
+    ///   RRGGBB               solid color        e.g. "FF0000"
+    ///   none / transparent   remove background
+    ///   C1-C2                gradient           e.g. "FF0000-0000FF"
+    ///   C1-C2-angle          gradient + angle   e.g. "FF0000-0000FF-45"
+    ///   C1-C2-C3             3-stop gradient    e.g. "FF0000-FFFF00-0000FF"
+    ///   image:path           image fill         e.g. "image:/tmp/bg.png"
+    /// </summary>
+    private static void ApplySlideBackground(SlidePart slidePart, string value)
+    {
+        var slide = GetSlide(slidePart);
+        var cSld = slide.CommonSlideData
+            ?? throw new InvalidOperationException("Slide has no CommonSlideData");
+
+        // Remove any existing background element
+        cSld.Background?.Remove();
+
+        if (value.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("transparent", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("clear", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var bg = new Background();
+        var bgPr = new BackgroundProperties();
+
+        if (value.StartsWith("image:", StringComparison.OrdinalIgnoreCase))
+        {
+            var imagePath = value[6..].Trim();
+            ApplyBackgroundImageFill(bgPr, slidePart, imagePath);
+        }
+        else if (IsGradientColorString(value))
+        {
+            bgPr.Append(BuildGradientFill(value));
+        }
+        else
+        {
+            bgPr.Append(new Drawing.SolidFill(
+                new Drawing.RgbColorModelHex { Val = value.TrimStart('#').ToUpperInvariant() }
+            ));
+        }
+
+        bg.Append(bgPr);
+
+        // Insert before ShapeTree — schema order: p:bg → p:spTree
+        var shapeTree = cSld.ShapeTree;
+        if (shapeTree != null)
+            cSld.InsertBefore(bg, shapeTree);
+        else
+            cSld.PrependChild(bg);
+    }
+
+    private static void ApplyBackgroundImageFill(
+        BackgroundProperties bgPr, SlidePart slidePart, string imagePath)
+    {
+        if (!File.Exists(imagePath))
+            throw new ArgumentException($"Image file not found: {imagePath}");
+
+        var ext = Path.GetExtension(imagePath).ToLowerInvariant();
+        var partType = ext switch
+        {
+            ".png"          => ImagePartType.Png,
+            ".jpg" or ".jpeg" => ImagePartType.Jpeg,
+            ".gif"          => ImagePartType.Gif,
+            ".bmp"          => ImagePartType.Bmp,
+            ".tif" or ".tiff" => ImagePartType.Tiff,
+            ".emf"          => ImagePartType.Emf,
+            ".wmf"          => ImagePartType.Wmf,
+            _ => throw new ArgumentException(
+                $"Unsupported image format: {ext}. Supported: png, jpg, gif, bmp, tif, emf, wmf")
+        };
+
+        var imagePart = slidePart.AddImagePart(partType);
+        using (var stream = File.OpenRead(imagePath))
+            imagePart.FeedData(stream);
+        var relId = slidePart.GetIdOfPart(imagePart);
+
+        var blipFill = new Drawing.BlipFill();
+        blipFill.Append(new Drawing.Blip { Embed = relId });
+        blipFill.Append(new Drawing.Stretch(new Drawing.FillRectangle()));
+        bgPr.Append(blipFill);
+    }
+
+    // ==================== Read back ====================
+
+    /// <summary>
+    /// Populate Format["background"] on a slide DocumentNode.
+    /// Values mirror the input format: hex for solid, "C1-C2[-angle]" for gradient, "image" for blip.
+    /// </summary>
+    private static void ReadSlideBackground(Slide slide, DocumentNode node)
+    {
+        var bgPr = slide.CommonSlideData?.Background?.BackgroundProperties;
+        if (bgPr == null) return;
+
+        var solidFill = bgPr.GetFirstChild<Drawing.SolidFill>();
+        var gradFill  = bgPr.GetFirstChild<Drawing.GradientFill>();
+        var blipFill  = bgPr.GetFirstChild<Drawing.BlipFill>();
+
+        if (solidFill != null)
+        {
+            var hex = solidFill.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
+            if (hex != null) node.Format["background"] = hex;
+        }
+        else if (gradFill != null)
+        {
+            var stops = gradFill.GradientStopList?.Elements<Drawing.GradientStop>()
+                .Select(gs => gs.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value ?? "?")
+                .ToList();
+            if (stops?.Count > 0)
+            {
+                var gradStr = string.Join("-", stops);
+                var linear = gradFill.GetFirstChild<Drawing.LinearGradientFill>();
+                if (linear?.Angle?.HasValue == true)
+                    gradStr += $"-{linear.Angle.Value / 60000}";
+                node.Format["background"] = gradStr;
+            }
+        }
+        else if (blipFill != null)
+        {
+            node.Format["background"] = "image";
+        }
+    }
+
+    // ==================== Helpers ====================
+
+    /// <summary>
+    /// Returns true if value looks like a gradient color string ("RRGGBB-RRGGBB[-angle]").
+    /// </summary>
+    private static bool IsGradientColorString(string value)
+    {
+        var parts = value.Split('-');
+        return parts.Length >= 2 && IsHexColorString(parts[0].TrimStart('#'));
+    }
+
+    private static bool IsHexColorString(string s)
+    {
+        s = s.TrimStart('#');
+        return (s.Length == 6 || s.Length == 8) &&
+               s.All(c => char.IsAsciiHexDigit(c));
+    }
+
+    /// <summary>
+    /// Build a GradientFill element from a color string.
+    /// Shared by both shape gradient and slide background gradient.
+    /// Format: "C1-C2", "C1-C2-angle", or "C1-C2-C3[-angle]"
+    /// </summary>
+    internal static Drawing.GradientFill BuildGradientFill(string value)
+    {
+        var parts = value.Split('-');
+        if (parts.Length < 2)
+            throw new ArgumentException(
+                "Gradient requires at least 2 colors separated by '-', e.g. FF0000-0000FF");
+
+        int angle = 5400000; // default 90° = top→bottom
+        var colorParts = parts.ToList();
+
+        // Last segment is angle if it parses as a short integer (≤3 digits)
+        if (colorParts.Count >= 2 &&
+            int.TryParse(colorParts.Last(), out var angleDeg) &&
+            colorParts.Last().Length <= 3)
+        {
+            angle = angleDeg * 60000;
+            colorParts.RemoveAt(colorParts.Count - 1);
+        }
+
+        var gradFill = new Drawing.GradientFill();
+        var gsLst = new Drawing.GradientStopList();
+
+        for (int i = 0; i < colorParts.Count; i++)
+        {
+            var pos = colorParts.Count == 1
+                ? 0
+                : (int)((long)i * 100000 / (colorParts.Count - 1));
+            var gs = new Drawing.GradientStop { Position = pos };
+            gs.AppendChild(new Drawing.RgbColorModelHex
+            {
+                Val = colorParts[i].TrimStart('#').ToUpperInvariant()
+            });
+            gsLst.AppendChild(gs);
+        }
+
+        gradFill.AppendChild(gsLst);
+        gradFill.AppendChild(new Drawing.LinearGradientFill { Angle = angle, Scaled = true });
+        return gradFill;
+    }
+}

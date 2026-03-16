@@ -32,6 +32,7 @@ public partial class PowerPointHandler
                     Type = "slide",
                     Preview = title
                 };
+                ReadSlideBackground(GetSlide(slidePart), slideNode);
 
                 if (depth > 0)
                 {
@@ -242,13 +243,15 @@ public partial class PowerPointHandler
         if (!match.Groups[2].Success)
         {
             // Return slide node
+            var slide = GetSlide(targetSlidePart);
             var slideNode = new DocumentNode
             {
                 Path = path,
                 Type = "slide",
-                Preview = GetSlide(targetSlidePart).CommonSlideData?.ShapeTree?.Elements<Shape>()
+                Preview = slide.CommonSlideData?.ShapeTree?.Elements<Shape>()
                     .Where(IsTitle).Select(GetShapeText).FirstOrDefault() ?? "(untitled)"
             };
+            ReadSlideBackground(slide, slideNode);
             slideNode.Children = GetSlideChildNodes(targetSlidePart, slideIdx, depth);
             slideNode.ChildCount = slideNode.Children.Count;
             return slideNode;

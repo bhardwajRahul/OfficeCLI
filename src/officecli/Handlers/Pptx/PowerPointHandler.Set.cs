@@ -232,6 +232,50 @@ public partial class PowerPointHandler
             return unsupported;
         }
 
+        // Try slide-level path: /slide[N]
+        var slideOnlyMatch = Regex.Match(path, @"^/slide\[(\d+)\]$");
+        if (slideOnlyMatch.Success)
+        {
+            var slideIdx = int.Parse(slideOnlyMatch.Groups[1].Value);
+            var slideParts2 = GetSlideParts().ToList();
+            if (slideIdx < 1 || slideIdx > slideParts2.Count)
+                throw new ArgumentException($"Slide {slideIdx} not found");
+            var slidePart2 = slideParts2[slideIdx - 1];
+            var slide2 = GetSlide(slidePart2);
+
+            var unsupported = new List<string>();
+            foreach (var (key, value) in properties)
+            {
+                switch (key.ToLowerInvariant())
+                {
+                    case "background":
+                        ApplySlideBackground(slidePart2, value);
+                        break;
+                    case "transition":
+                        ApplyTransition(slidePart2, value);
+                        break;
+                    case "advancetime" or "advanceaftertime":
+                    {
+                        var trans = slide2.GetFirstChild<Transition>() ?? slide2.AppendChild(new Transition());
+                        trans.AdvanceAfterTime = value;
+                        break;
+                    }
+                    case "advanceclick" or "advanceonclick":
+                    {
+                        var trans = slide2.GetFirstChild<Transition>() ?? slide2.AppendChild(new Transition());
+                        trans.AdvanceOnClick = bool.Parse(value);
+                        break;
+                    }
+                    default:
+                        if (!GenericXmlQuery.SetGenericAttribute(slide2, key, value))
+                            unsupported.Add(key);
+                        break;
+                }
+            }
+            slide2.Save();
+            return unsupported;
+        }
+
         // Try shape-level path: /slide[N]/shape[M]
         var match = Regex.Match(path, @"^/slide\[(\d+)\]/shape\[(\d+)\]$");
         if (match.Success)
@@ -241,7 +285,20 @@ public partial class PowerPointHandler
 
             var (slidePart, shape) = ResolveShape(slideIdx, shapeIdx);
             var allRuns = shape.Descendants<Drawing.Run>().ToList();
-            var unsupported = SetRunOrShapeProperties(properties, allRuns, shape);
+
+            // Separate animation property (needs slidePart) from shape properties
+            var animValue = properties.GetValueOrDefault("animation")
+                ?? properties.GetValueOrDefault("animate");
+            var shapeProps = properties
+                .Where(kv => !kv.Key.Equals("animation", StringComparison.OrdinalIgnoreCase)
+                          && !kv.Key.Equals("animate", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            var unsupported = SetRunOrShapeProperties(shapeProps, allRuns, shape);
+
+            if (animValue != null)
+                ApplyShapeAnimation(slidePart, shape, animValue);
+
             GetSlide(slidePart).Save();
             return unsupported;
         }

@@ -64,6 +64,10 @@ public partial class PowerPointHandler
                     newSlidePart.Slide.CommonSlideData!.ShapeTree!.AppendChild(textShape);
                 }
 
+                // Apply background if provided
+                if (properties.TryGetValue("background", out var bgValue))
+                    ApplySlideBackground(newSlidePart, bgValue);
+
                 newSlidePart.Slide.Save();
 
                 var maxId = slideIdList.Elements<SlideId>().Any()

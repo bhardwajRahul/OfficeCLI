@@ -52,33 +52,7 @@ public partial class PowerPointHandler
         spPr.RemoveAllChildren<Drawing.SolidFill>();
         spPr.RemoveAllChildren<Drawing.NoFill>();
         spPr.RemoveAllChildren<Drawing.GradientFill>();
-
-        var parts = value.Split('-');
-        if (parts.Length < 2)
-            throw new ArgumentException("gradient requires at least 2 colors separated by '-', e.g. FF0000-0000FF or FF0000-0000FF-90");
-
-        var gradFill = new Drawing.GradientFill();
-        var gsLst = new Drawing.GradientStopList();
-
-        int angle = 5400000; // default: top-to-bottom (90°)
-        var colorParts = parts.ToList();
-        if (colorParts.Count >= 2 && int.TryParse(colorParts.Last(), out var angleDeg) && colorParts.Last().Length <= 3)
-        {
-            angle = angleDeg * 60000;
-            colorParts.RemoveAt(colorParts.Count - 1);
-        }
-
-        for (int i = 0; i < colorParts.Count; i++)
-        {
-            var pos = colorParts.Count == 1 ? 0 : (int)((long)i * 100000 / (colorParts.Count - 1));
-            var gs = new Drawing.GradientStop { Position = pos };
-            gs.AppendChild(new Drawing.RgbColorModelHex { Val = colorParts[i].TrimStart('#').ToUpperInvariant() });
-            gsLst.AppendChild(gs);
-        }
-
-        gradFill.AppendChild(gsLst);
-        gradFill.AppendChild(new Drawing.LinearGradientFill { Angle = angle, Scaled = true });
-        InsertFillElement(spPr, gradFill);
+        InsertFillElement(spPr, BuildGradientFill(value));
     }
 
     /// <summary>
