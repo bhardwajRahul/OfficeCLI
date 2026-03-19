@@ -366,14 +366,10 @@ public partial class WordHandler
                         };
                         break;
                     case "pagewidth":
-                        if (!uint.TryParse(value, out var pgW))
-                            throw new ArgumentException($"Invalid 'pagewidth' value: '{value}'. Expected a positive integer (in twips, e.g. 12240 = 8.5 inches).");
-                        EnsureSectPrPageSize(sectPr).Width = pgW;
+                        EnsureSectPrPageSize(sectPr).Width = ParseHelpers.SafeParseUint(value, "pagewidth");
                         break;
                     case "pageheight":
-                        if (!uint.TryParse(value, out var pgH))
-                            throw new ArgumentException($"Invalid 'pageheight' value: '{value}'. Expected a positive integer (in twips, e.g. 15840 = 11 inches).");
-                        EnsureSectPrPageSize(sectPr).Height = pgH;
+                        EnsureSectPrPageSize(sectPr).Height = ParseHelpers.SafeParseUint(value, "pageheight");
                         break;
                     case "orientation":
                         var ps = EnsureSectPrPageSize(sectPr);
@@ -381,24 +377,16 @@ public partial class WordHandler
                             ? PageOrientationValues.Landscape : PageOrientationValues.Portrait;
                         break;
                     case "margintop":
-                        if (!int.TryParse(value, out var mtVal))
-                            throw new ArgumentException($"Invalid 'margintop' value: '{value}'. Expected an integer (in twips, e.g. 1440 = 1 inch).");
-                        EnsureSectPrPageMargin(sectPr).Top = mtVal;
+                        EnsureSectPrPageMargin(sectPr).Top = ParseHelpers.SafeParseInt(value, "margintop");
                         break;
                     case "marginbottom":
-                        if (!int.TryParse(value, out var mbVal))
-                            throw new ArgumentException($"Invalid 'marginbottom' value: '{value}'. Expected an integer (in twips).");
-                        EnsureSectPrPageMargin(sectPr).Bottom = mbVal;
+                        EnsureSectPrPageMargin(sectPr).Bottom = ParseHelpers.SafeParseInt(value, "marginbottom");
                         break;
                     case "marginleft":
-                        if (!uint.TryParse(value, out var mlVal))
-                            throw new ArgumentException($"Invalid 'marginleft' value: '{value}'. Expected a positive integer (in twips).");
-                        EnsureSectPrPageMargin(sectPr).Left = mlVal;
+                        EnsureSectPrPageMargin(sectPr).Left = ParseHelpers.SafeParseUint(value, "marginleft");
                         break;
                     case "marginright":
-                        if (!uint.TryParse(value, out var mrVal))
-                            throw new ArgumentException($"Invalid 'marginright' value: '{value}'. Expected a positive integer (in twips).");
-                        EnsureSectPrPageMargin(sectPr).Right = mrVal;
+                        EnsureSectPrPageMargin(sectPr).Right = ParseHelpers.SafeParseUint(value, "marginright");
                         break;
                     case "columns" or "cols" or "col":
                     {
@@ -731,7 +719,7 @@ public partial class WordHandler
                     case "highlight":
                         EnsureRunProperties(run).Highlight = new Highlight
                         {
-                            Val = new HighlightColorValues(value)
+                            Val = ParseHighlightColor(value)
                         };
                         break;
                     case "color":
@@ -1025,7 +1013,7 @@ public partial class WordHandler
                                         rPr.Color = new Color { Val = SanitizeHex(value) };
                                         break;
                                     case "highlight":
-                                        rPr.Highlight = new Highlight { Val = new HighlightColorValues(value) };
+                                        rPr.Highlight = new Highlight { Val = ParseHighlightColor(value) };
                                         break;
                                     case "underline":
                                     {
@@ -1070,7 +1058,7 @@ public partial class WordHandler
                                     break;
                                 case "highlight":
                                     pmrp.RemoveAllChildren<Highlight>();
-                                    pmrp.AppendChild(new Highlight { Val = new HighlightColorValues(value) });
+                                    pmrp.AppendChild(new Highlight { Val = ParseHighlightColor(value) });
                                     break;
                                 case "underline":
                                 {

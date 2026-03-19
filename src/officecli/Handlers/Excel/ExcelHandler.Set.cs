@@ -637,21 +637,13 @@ public partial class ExcelHandler
                     cell.DataType = null; // Formula cells should not retain DataType
                     break;
                 case "type":
-                    switch (value.ToLowerInvariant())
+                    cell.DataType = value.ToLowerInvariant() switch
                     {
-                        case "string" or "str":
-                            cell.DataType = new EnumValue<CellValues>(CellValues.String);
-                            break;
-                        case "number" or "num":
-                            cell.DataType = null;
-                            break;
-                        case "boolean" or "bool":
-                            cell.DataType = new EnumValue<CellValues>(CellValues.Boolean);
-                            break;
-                        default:
-                            unsupported.Add(key);
-                            break;
-                    }
+                        "string" or "str" => new EnumValue<CellValues>(CellValues.String),
+                        "number" or "num" => null,
+                        "boolean" or "bool" => new EnumValue<CellValues>(CellValues.Boolean),
+                        _ => throw new ArgumentException($"Invalid cell 'type' value '{value}'. Valid types: string, number, boolean.")
+                    };
                     break;
                 case "clear":
                     cell.CellValue = null;

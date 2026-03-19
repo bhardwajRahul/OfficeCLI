@@ -180,14 +180,10 @@ public class ExcelStyleManager
                         alignment.WrapText = IsTruthy(value);
                         break;
                     case "rotation" or "textrotation":
-                        if (!uint.TryParse(value, out var textRotNum))
-                            throw new ArgumentException($"Invalid 'rotation' value '{value}'. Expected a non-negative integer (0-180).");
-                        alignment.TextRotation = textRotNum;
+                        alignment.TextRotation = ParseHelpers.SafeParseUint(value, "rotation");
                         break;
                     case "indent":
-                        if (!uint.TryParse(value, out var indentVal))
-                            throw new ArgumentException($"Invalid 'indent' value '{value}'. Expected a non-negative integer.");
-                        alignment.Indent = indentVal;
+                        alignment.Indent = ParseHelpers.SafeParseUint(value, "indent");
                         break;
                     case "shrinktofit" or "shrink":
                         alignment.ShrinkToFit = IsTruthy(value);
