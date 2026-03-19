@@ -333,7 +333,7 @@ public partial class PowerPointHandler
                         "dashdot" or "dash_dot" => Drawing.PresetLineDashValues.DashDot,
                         "longdash" or "lgdash" or "lg_dash" => Drawing.PresetLineDashValues.LargeDash,
                         "longdashdot" or "lgdashdot" or "lg_dash_dot" => Drawing.PresetLineDashValues.LargeDashDot,
-                        _ => Drawing.PresetLineDashValues.Solid
+                        _ => throw new ArgumentException($"Invalid 'lineDash' value: '{value}'. Valid values: solid, dot, dash, dashdot, longdash, longdashdot.")
                     }});
                     break;
                 }
@@ -342,8 +342,8 @@ public partial class PowerPointHandler
                 {
                     var spPr = shape.ShapeProperties;
                     if (spPr == null) { unsupported.Add(key); break; }
-                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lnOpacity))
-                        throw new ArgumentException($"Invalid 'lineopacity' value: '{value}'. Expected a decimal 0.0-1.0 (e.g. 0.5 = 50% opacity).");
+                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lnOpacity) || double.IsNaN(lnOpacity) || double.IsInfinity(lnOpacity))
+                        throw new ArgumentException($"Invalid 'lineopacity' value: '{value}'. Expected a finite decimal 0.0-1.0 (e.g. 0.5 = 50% opacity).");
                     var outline = EnsureOutline(spPr);
                     var solidFillLn = outline.GetFirstChild<Drawing.SolidFill>();
                     if (solidFillLn != null)
@@ -364,8 +364,8 @@ public partial class PowerPointHandler
                 {
                     var spPr = shape.ShapeProperties;
                     if (spPr == null) { unsupported.Add(key); break; }
-                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rotVal))
-                        throw new ArgumentException($"Invalid 'rotation' value: '{value}'. Expected a number in degrees (e.g. 45, -90, 180.5).");
+                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rotVal) || double.IsNaN(rotVal) || double.IsInfinity(rotVal))
+                        throw new ArgumentException($"Invalid 'rotation' value: '{value}'. Expected a finite number in degrees (e.g. 45, -90, 180.5).");
                     var xfrm = spPr.Transform2D ?? (spPr.Transform2D = new Drawing.Transform2D());
                     xfrm.Rotation = (int)(rotVal * 60000); // degrees to 60000ths
                     break;
@@ -375,8 +375,8 @@ public partial class PowerPointHandler
                 {
                     var spPr = shape.ShapeProperties;
                     if (spPr == null) { unsupported.Add(key); break; }
-                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var opacityVal))
-                        throw new ArgumentException($"Invalid 'opacity' value: '{value}'. Expected a decimal 0.0-1.0 (e.g. 0.5 = 50% opacity).");
+                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var opacityVal) || double.IsNaN(opacityVal) || double.IsInfinity(opacityVal))
+                        throw new ArgumentException($"Invalid 'opacity' value: '{value}'. Expected a finite decimal 0.0-1.0 (e.g. 0.5 = 50% opacity).");
                     var solidFill = spPr.GetFirstChild<Drawing.SolidFill>();
                     if (solidFill != null)
                     {
@@ -404,8 +404,8 @@ public partial class PowerPointHandler
                 {
                     // Character spacing in points (e.g. "2" = +2pt, "-1" = -1pt)
                     // Stored as 1/100th of a point in OOXML (POI: setSpc((int)(100*spc)))
-                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var spcDbl))
-                        throw new ArgumentException($"Invalid 'charspacing' value: '{value}'. Expected a number in points (e.g. 2, -1, 0.5).");
+                    if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var spcDbl) || double.IsNaN(spcDbl) || double.IsInfinity(spcDbl))
+                        throw new ArgumentException($"Invalid 'charspacing' value: '{value}'. Expected a finite number in points (e.g. 2, -1, 0.5).");
                     var spcVal = (int)(spcDbl * 100);
                     foreach (var run in runs)
                     {
@@ -454,8 +454,8 @@ public partial class PowerPointHandler
                     {
                         var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
                         pProps.RemoveAllChildren<Drawing.LineSpacing>();
-                        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lsVal))
-                            throw new ArgumentException($"Invalid 'lineSpacing' value: '{value}'. Expected a decimal multiplier (e.g. 1.0 = single, 1.5 = 1.5x, 2.0 = double).");
+                        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lsVal) || double.IsNaN(lsVal) || double.IsInfinity(lsVal))
+                            throw new ArgumentException($"Invalid 'lineSpacing' value: '{value}'. Expected a finite decimal multiplier (e.g. 1.0 = single, 1.5 = 1.5x, 2.0 = double).");
                         pProps.AppendChild(new Drawing.LineSpacing(
                             new Drawing.SpacingPercent { Val = (int)(lsVal * 100000) })); // e.g. 1.5 → 150000 (150%)
                     }
@@ -468,8 +468,8 @@ public partial class PowerPointHandler
                     {
                         var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
                         pProps.RemoveAllChildren<Drawing.SpaceBefore>();
-                        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sbVal))
-                            throw new ArgumentException($"Invalid 'spaceBefore' value: '{value}'. Expected a number in points (e.g. 6, 12.5).");
+                        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sbVal) || double.IsNaN(sbVal) || double.IsInfinity(sbVal))
+                            throw new ArgumentException($"Invalid 'spaceBefore' value: '{value}'. Expected a finite number in points (e.g. 6, 12.5).");
                         pProps.AppendChild(new Drawing.SpaceBefore(new Drawing.SpacingPoints { Val = (int)(sbVal * 100) })); // pt
                     }
                     break;
@@ -481,8 +481,8 @@ public partial class PowerPointHandler
                     {
                         var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
                         pProps.RemoveAllChildren<Drawing.SpaceAfter>();
-                        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var saVal))
-                            throw new ArgumentException($"Invalid 'spaceAfter' value: '{value}'. Expected a number in points (e.g. 6, 12.5).");
+                        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var saVal) || double.IsNaN(saVal) || double.IsInfinity(saVal))
+                            throw new ArgumentException($"Invalid 'spaceAfter' value: '{value}'. Expected a finite number in points (e.g. 6, 12.5).");
                         pProps.AppendChild(new Drawing.SpaceAfter(new Drawing.SpacingPoints { Val = (int)(saVal * 100) })); // pt
                     }
                     break;
