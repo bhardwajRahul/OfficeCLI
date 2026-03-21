@@ -282,6 +282,36 @@ public class ResidentServer : IDisposable
         var limit = req.GetIntArg("limit");
         var cols = req.GetCols("cols");
 
+        if (mode!.ToLowerInvariant() is "html" or "h")
+        {
+            if (_handler is OfficeCli.Handlers.PowerPointHandler pptHandler)
+            {
+                var html = pptHandler.ViewAsHtml(start, end);
+
+                if (req.Json)
+                {
+                    Console.Write(html);
+                }
+                else
+                {
+                    var htmlPath = Path.Combine(Path.GetTempPath(), $"officecli_preview_{Path.GetFileNameWithoutExtension(_filePath)}_{DateTime.Now:HHmmss}.html");
+                    File.WriteAllText(htmlPath, html);
+                    Console.WriteLine(htmlPath);
+                    try
+                    {
+                        var psi = new System.Diagnostics.ProcessStartInfo(htmlPath) { UseShellExecute = true };
+                        System.Diagnostics.Process.Start(psi);
+                    }
+                    catch { /* silently ignore if browser can't be opened */ }
+                }
+            }
+            else
+            {
+                Console.Error.WriteLine("HTML preview is only supported for .pptx files.");
+            }
+            return;
+        }
+
         var output = mode!.ToLowerInvariant() switch
         {
             "text" or "t" => _handler.ViewAsText(start, end, maxLines, cols),
@@ -289,7 +319,7 @@ public class ResidentServer : IDisposable
             "outline" or "o" => _handler.ViewAsOutline(),
             "stats" or "s" => _handler.ViewAsStats(),
             "issues" or "i" => OutputFormatter.FormatIssues(_handler.ViewAsIssues(issueType, limit), format),
-            _ => $"Unknown mode: {mode}. Available: text, annotated, outline, stats, issues"
+            _ => $"Unknown mode: {mode}. Available: text, annotated, outline, stats, issues, html"
         };
 
         if (req.Json && mode is not ("issues" or "i"))
