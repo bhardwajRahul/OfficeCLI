@@ -1139,7 +1139,19 @@ public partial class PowerPointHandler
 
         if (chartType.Contains("pie") || chartType.Contains("doughnut"))
         {
-            RenderPieChartSvg(sb, seriesList, categories, seriesColors, svgW, svgH);
+            RenderPieChartSvg(sb, seriesList, categories, seriesColors, svgW, chartSvgH);
+        }
+        else if (chartType.Contains("area"))
+        {
+            RenderAreaChartSvg(sb, seriesList, categories, seriesColors, margin.left, margin.top, plotW, plotH);
+        }
+        else if (chartType == "combo")
+        {
+            RenderComboChartSvg(sb, plotArea, seriesList, categories, seriesColors, margin.left, margin.top, plotW, plotH);
+        }
+        else if (chartType.Contains("radar"))
+        {
+            RenderRadarChartSvg(sb, seriesList, categories, seriesColors, svgW, chartSvgH);
         }
         else if (chartType.Contains("line") || chartType == "scatter")
         {
@@ -1351,6 +1363,219 @@ public partial class PowerPointHandler
                 sb.AppendLine($"        <text x=\"{lx:0.#}\" y=\"{ly:0.#}\" fill=\"white\" font-size=\"9\" text-anchor=\"middle\" dominant-baseline=\"middle\">{HtmlEncode(label)}</text>");
 
             startAngle = endAngle;
+        }
+    }
+
+    private static void RenderAreaChartSvg(StringBuilder sb, List<(string name, double[] values)> series,
+        string[] categories, List<string> colors, int ox, int oy, int pw, int ph)
+    {
+        var allValues = series.SelectMany(s => s.values).ToArray();
+        if (allValues.Length == 0) return;
+        var maxVal = allValues.Max();
+        if (maxVal <= 0) maxVal = 1;
+        var catCount = Math.Max(categories.Length, series.Max(s => s.values.Length));
+
+        // Axis lines
+        sb.AppendLine($"        <line x1=\"{ox}\" y1=\"{oy}\" x2=\"{ox}\" y2=\"{oy + ph}\" stroke=\"#555\" stroke-width=\"1\"/>");
+        sb.AppendLine($"        <line x1=\"{ox}\" y1=\"{oy + ph}\" x2=\"{ox + pw}\" y2=\"{oy + ph}\" stroke=\"#555\" stroke-width=\"1\"/>");
+
+        // Render in reverse order so first series is on top
+        for (int s = series.Count - 1; s >= 0; s--)
+        {
+            var points = new List<string>();
+            for (int c = 0; c < series[s].values.Length && c < catCount; c++)
+            {
+                var px = ox + (catCount > 1 ? (double)pw * c / (catCount - 1) : pw / 2.0);
+                var py = oy + ph - (series[s].values[c] / maxVal) * ph;
+                points.Add($"{px:0.#},{py:0.#}");
+            }
+            if (points.Count > 0)
+            {
+                // Close polygon to baseline
+                var firstX = ox + (catCount > 1 ? 0 : pw / 2.0);
+                var lastX = ox + (catCount > 1 ? (double)pw * (series[s].values.Length - 1) / (catCount - 1) : pw / 2.0);
+                var polygonPoints = $"{firstX:0.#},{oy + ph} {string.Join(" ", points)} {lastX:0.#},{oy + ph}";
+                sb.AppendLine($"        <polygon points=\"{polygonPoints}\" fill=\"{colors[s]}\" opacity=\"0.4\"/>");
+                sb.AppendLine($"        <polyline points=\"{string.Join(" ", points)}\" fill=\"none\" stroke=\"{colors[s]}\" stroke-width=\"2\"/>");
+            }
+        }
+
+        // Category labels
+        for (int c = 0; c < catCount; c++)
+        {
+            var label = c < categories.Length ? categories[c] : "";
+            var lx = ox + (catCount > 1 ? (double)pw * c / (catCount - 1) : pw / 2.0);
+            sb.AppendLine($"        <text x=\"{lx:0.#}\" y=\"{oy + ph + 14}\" fill=\"#999\" font-size=\"9\" text-anchor=\"middle\">{HtmlEncode(label)}</text>");
+        }
+
+        // Value axis labels
+        for (int t = 0; t <= 4; t++)
+        {
+            var val = maxVal * t / 4;
+            var label = val % 1 == 0 ? $"{(int)val}" : $"{val:0.#}";
+            var ty = oy + ph - (double)ph * t / 4;
+            sb.AppendLine($"        <text x=\"{ox - 4}\" y=\"{ty:0.#}\" fill=\"#777\" font-size=\"8\" text-anchor=\"end\" dominant-baseline=\"middle\">{label}</text>");
+        }
+    }
+
+    private void RenderComboChartSvg(StringBuilder sb, DocumentFormat.OpenXml.Drawing.Charts.PlotArea plotArea,
+        List<(string name, double[] values)> seriesList, string[] categories, List<string> colors,
+        int ox, int oy, int pw, int ph)
+    {
+        // Combo: render bar series as bars, line series as lines
+        // Detect which series are in BarChart vs LineChart
+        var barIndices = new HashSet<int>();
+        var lineIndices = new HashSet<int>();
+        var idx = 0;
+        foreach (var chartEl in plotArea.ChildElements)
+        {
+            var serElements = chartEl.Descendants<OpenXmlCompositeElement>().Where(e => e.LocalName == "ser").ToList();
+            if (serElements.Count == 0) continue;
+            var isBar = chartEl.LocalName.Contains("bar") || chartEl.LocalName.Contains("Bar");
+            foreach (var _ in serElements)
+            {
+                if (isBar) barIndices.Add(idx); else lineIndices.Add(idx);
+                idx++;
+            }
+        }
+
+        var allValues = seriesList.SelectMany(s => s.values).ToArray();
+        if (allValues.Length == 0) return;
+        var maxVal = allValues.Max();
+        if (maxVal <= 0) maxVal = 1;
+        var catCount = Math.Max(categories.Length, seriesList.Max(s => s.values.Length));
+
+        // Axis lines
+        sb.AppendLine($"        <line x1=\"{ox}\" y1=\"{oy}\" x2=\"{ox}\" y2=\"{oy + ph}\" stroke=\"#555\" stroke-width=\"1\"/>");
+        sb.AppendLine($"        <line x1=\"{ox}\" y1=\"{oy + ph}\" x2=\"{ox + pw}\" y2=\"{oy + ph}\" stroke=\"#555\" stroke-width=\"1\"/>");
+
+        // Bar series
+        var barSeries = barIndices.Where(i => i < seriesList.Count).ToList();
+        var barCount = barSeries.Count;
+        if (barCount > 0)
+        {
+            var groupW = (double)pw / Math.Max(catCount, 1);
+            var barW = groupW * 0.7 / barCount;
+            var gap = groupW * 0.15;
+            for (int bi = 0; bi < barCount; bi++)
+            {
+                var s = barSeries[bi];
+                for (int c = 0; c < seriesList[s].values.Length && c < catCount; c++)
+                {
+                    var val = seriesList[s].values[c];
+                    var barH = (val / maxVal) * ph;
+                    var bx = ox + c * groupW + gap + bi * barW;
+                    var by = oy + ph - barH;
+                    sb.AppendLine($"        <rect x=\"{bx:0.#}\" y=\"{by:0.#}\" width=\"{barW:0.#}\" height=\"{barH:0.#}\" fill=\"{colors[s % colors.Count]}\" opacity=\"0.85\"/>");
+                }
+            }
+        }
+
+        // Line series
+        foreach (var s in lineIndices.Where(i => i < seriesList.Count))
+        {
+            var points = new List<string>();
+            for (int c = 0; c < seriesList[s].values.Length && c < catCount; c++)
+            {
+                var px = ox + (catCount > 1 ? (double)pw * c / (catCount - 1) : pw / 2.0);
+                var py = oy + ph - (seriesList[s].values[c] / maxVal) * ph;
+                points.Add($"{px:0.#},{py:0.#}");
+            }
+            if (points.Count > 0)
+            {
+                sb.AppendLine($"        <polyline points=\"{string.Join(" ", points)}\" fill=\"none\" stroke=\"{colors[s % colors.Count]}\" stroke-width=\"2.5\"/>");
+                foreach (var pt in points)
+                {
+                    var parts = pt.Split(',');
+                    sb.AppendLine($"        <circle cx=\"{parts[0]}\" cy=\"{parts[1]}\" r=\"3\" fill=\"{colors[s % colors.Count]}\"/>");
+                }
+            }
+        }
+
+        // Category labels
+        for (int c = 0; c < catCount; c++)
+        {
+            var label = c < categories.Length ? categories[c] : "";
+            var lx = ox + (double)pw * c / Math.Max(catCount, 1) + (double)pw / Math.Max(catCount, 1) / 2;
+            sb.AppendLine($"        <text x=\"{lx:0.#}\" y=\"{oy + ph + 14}\" fill=\"#999\" font-size=\"9\" text-anchor=\"middle\">{HtmlEncode(label)}</text>");
+        }
+
+        // Value axis labels
+        for (int t = 0; t <= 4; t++)
+        {
+            var val = maxVal * t / 4;
+            var label = val % 1 == 0 ? $"{(int)val}" : $"{val:0.#}";
+            var ty = oy + ph - (double)ph * t / 4;
+            sb.AppendLine($"        <text x=\"{ox - 4}\" y=\"{ty:0.#}\" fill=\"#777\" font-size=\"8\" text-anchor=\"end\" dominant-baseline=\"middle\">{label}</text>");
+        }
+    }
+
+    private static void RenderRadarChartSvg(StringBuilder sb, List<(string name, double[] values)> series,
+        string[] categories, List<string> colors, int svgW, int svgH)
+    {
+        var catCount = Math.Max(categories.Length, series.Max(s => s.values.Length));
+        if (catCount < 3) return;
+        var allValues = series.SelectMany(s => s.values).ToArray();
+        if (allValues.Length == 0) return;
+        var maxVal = allValues.Max();
+        if (maxVal <= 0) maxVal = 1;
+
+        var cx = svgW / 2.0;
+        var cy = svgH / 2.0;
+        var r = Math.Min(svgW, svgH) * 0.35;
+
+        // Grid lines (3 rings)
+        for (int ring = 1; ring <= 3; ring++)
+        {
+            var rr = r * ring / 3;
+            var gridPoints = new List<string>();
+            for (int c = 0; c < catCount; c++)
+            {
+                var angle = -Math.PI / 2 + 2 * Math.PI * c / catCount;
+                gridPoints.Add($"{cx + rr * Math.Cos(angle):0.#},{cy + rr * Math.Sin(angle):0.#}");
+            }
+            sb.AppendLine($"        <polygon points=\"{string.Join(" ", gridPoints)}\" fill=\"none\" stroke=\"#444\" stroke-width=\"0.5\"/>");
+        }
+
+        // Axis lines
+        for (int c = 0; c < catCount; c++)
+        {
+            var angle = -Math.PI / 2 + 2 * Math.PI * c / catCount;
+            var ax = cx + r * Math.Cos(angle);
+            var ay = cy + r * Math.Sin(angle);
+            sb.AppendLine($"        <line x1=\"{cx:0.#}\" y1=\"{cy:0.#}\" x2=\"{ax:0.#}\" y2=\"{ay:0.#}\" stroke=\"#444\" stroke-width=\"0.5\"/>");
+        }
+
+        // Data series
+        for (int s = 0; s < series.Count; s++)
+        {
+            var points = new List<string>();
+            for (int c = 0; c < series[s].values.Length && c < catCount; c++)
+            {
+                var angle = -Math.PI / 2 + 2 * Math.PI * c / catCount;
+                var val = series[s].values[c] / maxVal * r;
+                points.Add($"{cx + val * Math.Cos(angle):0.#},{cy + val * Math.Sin(angle):0.#}");
+            }
+            if (points.Count > 0)
+            {
+                sb.AppendLine($"        <polygon points=\"{string.Join(" ", points)}\" fill=\"{colors[s]}\" fill-opacity=\"0.2\" stroke=\"{colors[s]}\" stroke-width=\"2\"/>");
+                foreach (var pt in points)
+                {
+                    var parts = pt.Split(',');
+                    sb.AppendLine($"        <circle cx=\"{parts[0]}\" cy=\"{parts[1]}\" r=\"3\" fill=\"{colors[s]}\"/>");
+                }
+            }
+        }
+
+        // Category labels
+        for (int c = 0; c < catCount; c++)
+        {
+            var label = c < categories.Length ? categories[c] : "";
+            var angle = -Math.PI / 2 + 2 * Math.PI * c / catCount;
+            var lx = cx + (r + 15) * Math.Cos(angle);
+            var ly = cy + (r + 15) * Math.Sin(angle);
+            var anchor = Math.Abs(Math.Cos(angle)) < 0.1 ? "middle" : (Math.Cos(angle) > 0 ? "start" : "end");
+            sb.AppendLine($"        <text x=\"{lx:0.#}\" y=\"{ly:0.#}\" fill=\"#999\" font-size=\"9\" text-anchor=\"{anchor}\" dominant-baseline=\"middle\">{HtmlEncode(label)}</text>");
         }
     }
 
