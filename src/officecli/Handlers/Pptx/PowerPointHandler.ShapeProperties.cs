@@ -924,6 +924,43 @@ public partial class PowerPointHandler
                 case "hmerge":
                     cell.HorizontalMerge = new DocumentFormat.OpenXml.BooleanValue(IsTruthy(value));
                     break;
+                case "merge.right":
+                {
+                    // Convenience: merge.right=N sets gridSpan on this cell and hMerge on next N cells
+                    var span = ParseHelpers.SafeParseInt(value, "merge.right") + 1;
+                    cell.GridSpan = new DocumentFormat.OpenXml.Int32Value(span);
+                    var row = cell.Parent as Drawing.TableRow;
+                    if (row != null)
+                    {
+                        var cells = row.Elements<Drawing.TableCell>().ToList();
+                        var idx = cells.IndexOf(cell);
+                        for (int mi = idx + 1; mi < idx + span && mi < cells.Count; mi++)
+                            cells[mi].HorizontalMerge = new DocumentFormat.OpenXml.BooleanValue(true);
+                    }
+                    break;
+                }
+                case "merge.down":
+                {
+                    // Convenience: merge.down=N sets rowSpan on this cell and vMerge on cells below
+                    var rSpan = ParseHelpers.SafeParseInt(value, "merge.down") + 1;
+                    cell.RowSpan = new DocumentFormat.OpenXml.Int32Value(rSpan);
+                    var row = cell.Parent as Drawing.TableRow;
+                    var table = row?.Parent;
+                    if (table != null && row != null)
+                    {
+                        var rows = table.Elements<Drawing.TableRow>().ToList();
+                        var rowIdx = rows.IndexOf(row);
+                        var cells = row.Elements<Drawing.TableCell>().ToList();
+                        var colIdx = cells.IndexOf(cell);
+                        for (int ri = rowIdx + 1; ri < rowIdx + rSpan && ri < rows.Count; ri++)
+                        {
+                            var belowCells = rows[ri].Elements<Drawing.TableCell>().ToList();
+                            if (colIdx < belowCells.Count)
+                                belowCells[colIdx].VerticalMerge = new DocumentFormat.OpenXml.BooleanValue(true);
+                        }
+                    }
+                    break;
+                }
                 case "underline":
                     EnsureTableCellHasRun(cell);
                     foreach (var run in cell.Descendants<Drawing.Run>())
