@@ -205,7 +205,7 @@ static class CommandBuilder
                 if (issueType != null) req.Args["type"] = issueType;
                 if (limit.HasValue) req.Args["limit"] = limit.Value.ToString();
                 if (colsStr != null) req.Args["cols"] = colsStr;
-            })) return;
+            }, json)) return;
 
             var format = json ? OutputFormat.Json : OutputFormat.Text;
             var cols = colsStr != null ? new HashSet<string>(colsStr.Split(',').Select(c => c.Trim().ToUpperInvariant())) : null;
@@ -304,7 +304,7 @@ static class CommandBuilder
                 req.Json = json;
                 req.Args["path"] = path;
                 req.Args["depth"] = depth.ToString();
-            })) return;
+            }, json)) return;
 
             using var handler = DocumentHandlerFactory.Open(file.FullName);
             var node = handler.Get(path, depth);
@@ -336,7 +336,7 @@ static class CommandBuilder
                 req.Command = "query";
                 req.Json = json;
                 req.Args["selector"] = selector;
-            })) return;
+            }, json)) return;
 
             var format = json ? OutputFormat.Json : OutputFormat.Text;
 
@@ -381,7 +381,7 @@ static class CommandBuilder
                 req.Command = "set";
                 req.Args["path"] = path;
                 req.Props = props;
-            })) { WatchNotifier.NotifyIfWatching(file.FullName, path); return; }
+            }, json)) { WatchNotifier.NotifyIfWatching(file.FullName, path); return; }
 
             var properties = new Dictionary<string, string>();
             foreach (var prop in props ?? Array.Empty<string>())
@@ -471,7 +471,7 @@ static class CommandBuilder
                     req.Args["parent"] = parentPath;
                     req.Args["from"] = from;
                     if (index.HasValue) req.Args["index"] = index.Value.ToString();
-                })) { WatchNotifier.NotifyIfWatching(file.FullName, parentPath); return; }
+                }, json)) { WatchNotifier.NotifyIfWatching(file.FullName, parentPath); return; }
 
                 using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
                 var resultPath = handler.CopyFrom(from, parentPath, index);
@@ -489,7 +489,7 @@ static class CommandBuilder
                     req.Args["type"] = type!;
                     if (index.HasValue) req.Args["index"] = index.Value.ToString();
                     req.Props = props;
-                })) { WatchNotifier.NotifyIfWatching(file.FullName, parentPath); return; }
+                }, json)) { WatchNotifier.NotifyIfWatching(file.FullName, parentPath); return; }
 
                 var properties = new Dictionary<string, string>();
                 foreach (var prop in props ?? Array.Empty<string>())
@@ -530,7 +530,7 @@ static class CommandBuilder
             {
                 req.Command = "remove";
                 req.Args["path"] = path;
-            })) { WatchNotifier.NotifyIfWatching(file.FullName, path); return; }
+            }, json)) { WatchNotifier.NotifyIfWatching(file.FullName, path); return; }
 
             using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
             handler.Remove(path);
@@ -568,7 +568,7 @@ static class CommandBuilder
                 req.Args["path"] = path;
                 if (to != null) req.Args["to"] = to;
                 if (index.HasValue) req.Args["index"] = index.Value.ToString();
-            })) { WatchNotifier.NotifyIfWatching(file.FullName, path); return; }
+            }, json)) { WatchNotifier.NotifyIfWatching(file.FullName, path); return; }
 
             using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
             var resultPath = handler.Move(path, to, index);
@@ -613,7 +613,7 @@ static class CommandBuilder
                 if (startRow.HasValue) req.Args["start"] = startRow.Value.ToString();
                 if (endRow.HasValue) req.Args["end"] = endRow.Value.ToString();
                 if (rawColsStr != null) req.Args["cols"] = rawColsStr;
-            })) return;
+            }, json)) return;
 
             var rawCols = rawColsStr != null ? new HashSet<string>(rawColsStr.Split(',').Select(c => c.Trim().ToUpperInvariant())) : null;
 
@@ -655,7 +655,7 @@ static class CommandBuilder
                 req.Args["xpath"] = xpath;
                 req.Args["action"] = action;
                 if (xml != null) req.Args["xml"] = xml;
-            })) { WatchNotifier.NotifyIfWatching(file.FullName, partPath); return; }
+            }, json)) { WatchNotifier.NotifyIfWatching(file.FullName, partPath); return; }
 
             using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
             var errorsBefore = handler.Validate().Select(e => e.Description).ToHashSet();
@@ -694,7 +694,7 @@ static class CommandBuilder
                 req.Command = "add-part";
                 req.Args["parent"] = parent;
                 req.Args["type"] = type;
-            })) { WatchNotifier.NotifyIfWatching(file, parent); return; }
+            }, json)) { WatchNotifier.NotifyIfWatching(file, parent); return; }
 
             using var handler = DocumentHandlerFactory.Open(file, editable: true);
             var errorsBefore = handler.Validate().Select(e => e.Description).ToHashSet();
@@ -725,7 +725,7 @@ static class CommandBuilder
             {
                 req.Command = "validate";
                 req.Json = json;
-            })) return;
+            }, json)) return;
 
             using var handler = DocumentHandlerFactory.Open(file.FullName);
             var errors = handler.Validate();
@@ -881,7 +881,7 @@ static class CommandBuilder
     }
 
     // ==================== Helper: try forwarding to resident ====================
-    internal static bool TryResident(string filePath, Action<ResidentRequest> configure)
+    internal static bool TryResident(string filePath, Action<ResidentRequest> configure, bool json = false)
     {
         var request = new ResidentRequest();
         configure(request);
@@ -890,10 +890,53 @@ static class CommandBuilder
         if (response == null)
             return false;
 
-        if (!string.IsNullOrEmpty(response.Stdout))
-            Console.WriteLine(response.Stdout);
-        if (!string.IsNullOrEmpty(response.Stderr))
-            Console.Error.WriteLine(response.Stderr);
+        if (json)
+        {
+            // JSON mode: wrap resident output in envelope with warnings
+            List<CliWarning>? warnings = null;
+            if (!string.IsNullOrEmpty(response.Stderr))
+            {
+                warnings = response.Stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(line => new CliWarning { Message = line, Code = "resident_warning" })
+                    .ToList();
+            }
+
+            if (response.ExitCode != 0)
+            {
+                // Error from resident — stdout may already contain structured JSON error
+                var stdout = response.Stdout ?? "";
+                if (stdout.TrimStart().StartsWith('{'))
+                {
+                    // Resident already returned structured error JSON; wrap in envelope
+                    Console.WriteLine(OutputFormatter.WrapErrorEnvelopeRaw(stdout));
+                }
+                else
+                {
+                    var errorMsg = !string.IsNullOrEmpty(response.Stderr) ? response.Stderr : (!string.IsNullOrEmpty(stdout) ? stdout : "Unknown resident error");
+                    Console.WriteLine(OutputFormatter.WrapErrorEnvelope(new CliException(errorMsg) { Code = "resident_error" }));
+                }
+            }
+            else if (!string.IsNullOrEmpty(response.Stdout))
+            {
+                // Check if stdout is already JSON (from resident's JSON-mode output)
+                var stdout = response.Stdout;
+                if (stdout.TrimStart().StartsWith('{') || stdout.TrimStart().StartsWith('['))
+                    Console.WriteLine(OutputFormatter.WrapEnvelope(stdout, warnings));
+                else
+                    Console.WriteLine(OutputFormatter.WrapEnvelopeText(stdout, warnings));
+            }
+            else
+            {
+                Console.WriteLine(OutputFormatter.WrapEnvelopeText("OK", warnings));
+            }
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(response.Stdout))
+                Console.WriteLine(response.Stdout);
+            if (!string.IsNullOrEmpty(response.Stderr))
+                Console.Error.WriteLine(response.Stderr);
+        }
 
         return true;
     }
