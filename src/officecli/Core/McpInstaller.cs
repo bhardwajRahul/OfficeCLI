@@ -80,7 +80,7 @@ public static class McpInstaller
             """{"type":"plugin","runner":"mcpBridge","owner":"mcp","name":"officecli"}""" + "\n");
 
         File.WriteAllText(Path.Combine(pluginDir, "mcp-bridge-config.json"),
-            $$"""{"command":"{{EscapeJson(OfficecliPath)}}","args":["mcp-serve"]}""" + "\n");
+            $$"""{"command":"{{EscapeJson(OfficecliPath)}}","args":["mcp"]}""" + "\n");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         File.WriteAllText(Path.Combine(pluginDir, "install-state.json"),
@@ -161,7 +161,7 @@ public static class McpInstaller
             }
         }
 
-        servers["officecli"] = new McpServerEntry { Command = OfficecliPath, Args = ["mcp-serve"] };
+        servers["officecli"] = new McpServerEntry { Command = OfficecliPath, Args = ["mcp"] };
         root[serversKey] = servers;
 
         // Write with proper formatting using Utf8JsonWriter
