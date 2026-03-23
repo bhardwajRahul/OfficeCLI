@@ -19,6 +19,8 @@ public class WatchServer : IDisposable
     private CancellationTokenSource _cts = new();
     private string _currentHtml = "";
     private bool _disposed;
+    private DateTime _lastActivityTime = DateTime.UtcNow;
+    private readonly TimeSpan _idleTimeout;
 
     private const string SseScript = """
         <script>
@@ -81,11 +83,12 @@ public class WatchServer : IDisposable
         </script>
         """;
 
-    public WatchServer(string filePath, int port)
+    public WatchServer(string filePath, int port, TimeSpan? idleTimeout = null)
     {
         _filePath = Path.GetFullPath(filePath);
         _pipeName = GetWatchPipeName(_filePath);
         _port = port;
+        _idleTimeout = idleTimeout ?? TimeSpan.FromMinutes(5);
         _tcpListener = new TcpListener(IPAddress.Loopback, _port);
     }
 
@@ -112,6 +115,7 @@ public class WatchServer : IDisposable
         Console.WriteLine("Press Ctrl+C to stop.");
 
         var pipeTask = RunPipeListenerAsync(token);
+        var idleTask = RunIdleWatchdogAsync(token);
 
         while (!token.IsCancellationRequested)
         {
@@ -129,6 +133,24 @@ public class WatchServer : IDisposable
         }
 
         try { await pipeTask; } catch (OperationCanceledException) { }
+        try { await idleTask; } catch (OperationCanceledException) { }
+    }
+
+    private async Task RunIdleWatchdogAsync(CancellationToken token)
+    {
+        var checkInterval = TimeSpan.FromSeconds(Math.Min(30, Math.Max(1, _idleTimeout.TotalSeconds / 2)));
+        while (!token.IsCancellationRequested)
+        {
+            await Task.Delay(checkInterval, token);
+            int clientCount;
+            lock (_sseLock) { clientCount = _sseClients.Count; }
+            if (clientCount == 0 && DateTime.UtcNow - _lastActivityTime > _idleTimeout)
+            {
+                Console.WriteLine("Watch: idle timeout, shutting down.");
+                _cts.Cancel();
+                break;
+            }
+        }
     }
 
     private void RefreshFullHtml()
@@ -301,6 +323,7 @@ public class WatchServer : IDisposable
 
                 var message = await reader.ReadLineAsync(token);
                 await writer.WriteLineAsync("ok".AsMemory(), token);
+                _lastActivityTime = DateTime.UtcNow;
 
                 if (message == "close")
                 {
@@ -478,6 +501,7 @@ public class WatchServer : IDisposable
             "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\n\r\n");
         await stream.WriteAsync(header, token);
 
+        _lastActivityTime = DateTime.UtcNow;
         lock (_sseLock) { _sseClients.Add(stream); }
 
         try
