@@ -34,6 +34,7 @@ public partial class PowerPointHandler
             "paragraph" or "para" => AddParagraph(parentPath, index, properties),
             "run" => AddRun(parentPath, index, properties),
             "zoom" or "slidezoom" or "slide-zoom" => AddZoom(parentPath, index, properties),
+            "3dmodel" or "model3d" or "model" or "glb" => AddModel3D(parentPath, index, properties),
             _ => AddDefault(parentPath, index, properties, type)
         };
     }

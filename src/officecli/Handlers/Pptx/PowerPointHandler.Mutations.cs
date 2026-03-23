@@ -136,6 +136,24 @@ public partial class PowerPointHandler
             }
             group.Remove();
         }
+        else if (elementType is "3dmodel" or "model3d")
+        {
+            var model3dElements = GetModel3DElements(shapeTree);
+            if (elementIdx < 1 || elementIdx > model3dElements.Count)
+                throw new ArgumentException($"3D model {elementIdx} not found (total: {model3dElements.Count})");
+            var m3dAc = model3dElements[elementIdx - 1];
+            // Clean up model part and image parts
+            var m3dRNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            foreach (var el in m3dAc.Descendants().Where(d => d.LocalName == "blip" || d.LocalName == "model3d"))
+            {
+                var embedAttr = el.GetAttribute("embed", m3dRNs);
+                if (!string.IsNullOrEmpty(embedAttr.Value))
+                {
+                    try { slidePart.DeletePart(embedAttr.Value); } catch { }
+                }
+            }
+            m3dAc.Remove();
+        }
         else if (elementType is "zoom" or "slidezoom")
         {
             var zoomElements = GetZoomElements(shapeTree);
@@ -166,7 +184,7 @@ public partial class PowerPointHandler
         }
         else
         {
-            throw new ArgumentException($"Unknown element type: {elementType}. Supported: shape, picture, video, audio, table, chart, connector/connection, group, zoom");
+            throw new ArgumentException($"Unknown element type: {elementType}. Supported: shape, picture, video, audio, table, chart, connector/connection, group, zoom, 3dmodel");
         }
 
         GetSlide(slidePart).Save();

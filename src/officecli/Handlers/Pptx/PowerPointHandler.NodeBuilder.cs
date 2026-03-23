@@ -92,6 +92,14 @@ public partial class PowerPointHandler
             children.Add(ZoomToNode(zmEl, slideNum, zmIdx));
         }
 
+        var model3dElements = GetModel3DElements(shapeTree);
+        int m3dIdx = 0;
+        foreach (var m3dEl in model3dElements)
+        {
+            m3dIdx++;
+            children.Add(Model3DToNode(m3dEl, slideNum, m3dIdx));
+        }
+
         return children;
     }
 

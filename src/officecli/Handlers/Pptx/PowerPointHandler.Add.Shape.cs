@@ -242,12 +242,12 @@ public partial class PowerPointHandler
                     long cxEmu = titleSlideW, cyEmu = 742950; // default: slide width x ~2.06cm
                     if (properties.TryGetValue("x", out var xStr) || properties.TryGetValue("left", out xStr)) xEmu = ParseEmu(xStr);
                     if (properties.TryGetValue("y", out var yStr) || properties.TryGetValue("top", out yStr)) yEmu = ParseEmu(yStr);
-                    if (properties.TryGetValue("width", out var wStr))
+                    if (properties.TryGetValue("width", out var wStr) || properties.TryGetValue("w", out wStr))
                     {
                         cxEmu = ParseEmu(wStr);
                         if (cxEmu < 0) throw new ArgumentException($"Negative width is not allowed: '{wStr}'.");
                     }
-                    if (properties.TryGetValue("height", out var hStr))
+                    if (properties.TryGetValue("height", out var hStr) || properties.TryGetValue("h", out hStr))
                     {
                         cyEmu = ParseEmu(hStr);
                         if (cyEmu < 0) throw new ArgumentException($"Negative height is not allowed: '{hStr}'.");
