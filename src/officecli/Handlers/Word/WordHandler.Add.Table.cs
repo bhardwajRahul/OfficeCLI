@@ -55,7 +55,7 @@ public partial class WordHandler
 
         // Parse per-column widths: colWidths="3000,2000,5000"
         int[]? colWidthArr = null;
-        if (properties.TryGetValue("colwidths", out var cwStr))
+        if (properties.TryGetValue("colwidths", out var cwStr) || properties.TryGetValue("colWidths", out cwStr))
         {
             var parts = cwStr.Split(',');
             colWidthArr = new int[parts.Length];
