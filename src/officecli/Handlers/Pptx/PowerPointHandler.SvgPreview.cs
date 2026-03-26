@@ -484,8 +484,10 @@ public partial class PowerPointHandler
         double textW = shapeW - lIns - rIns;
         if (textW <= 0) return;
 
+        const double ptToPx = 96.0 / 72.0;
+
         // Gather paragraph info
-        var paraInfos = new List<(Drawing.Paragraph para, double fontSizePt, string align)>();
+        var paraInfos = new List<(Drawing.Paragraph para, double fontSizePt, string align, double lineHeight, double spaceBefore, double spaceAfter, string? bullet)>();
         foreach (var para in paragraphs)
         {
             var firstRun = para.Elements<Drawing.Run>().FirstOrDefault();
@@ -496,25 +498,48 @@ public partial class PowerPointHandler
                 fontSizePt = rp.FontSize.Value / 100.0;
 
             var align = "start";
-            if (para.ParagraphProperties?.Alignment?.HasValue == true)
+            var pProps = para.ParagraphProperties;
+            if (pProps?.Alignment?.HasValue == true)
             {
-                align = para.ParagraphProperties.Alignment.InnerText switch
+                align = pProps.Alignment.InnerText switch
                 {
                     "ctr" => "middle",
                     "r" => "end",
+                    "just" or "dist" => "start", // SVG can't justify, fall back to start
                     _ => "start"
                 };
             }
 
-            paraInfos.Add((para, fontSizePt, align));
+            // Line spacing
+            double lineHeight = 1.0; // PowerPoint default is single spacing
+            var lsPct = pProps?.GetFirstChild<Drawing.LineSpacing>()?.GetFirstChild<Drawing.SpacingPercent>()?.Val?.Value;
+            if (lsPct.HasValue) lineHeight = lsPct.Value / 100000.0;
+            var lsPts = pProps?.GetFirstChild<Drawing.LineSpacing>()?.GetFirstChild<Drawing.SpacingPoints>()?.Val?.Value;
+            if (lsPts.HasValue) lineHeight = lsPts.Value / 100.0 / fontSizePt; // convert pt spacing to ratio
+
+            // Paragraph spacing
+            double spaceBefore = 0;
+            var sbPts = pProps?.GetFirstChild<Drawing.SpaceBefore>()?.GetFirstChild<Drawing.SpacingPoints>()?.Val?.Value;
+            if (sbPts.HasValue) spaceBefore = sbPts.Value / 100.0 * ptToPx;
+
+            double spaceAfter = 0;
+            var saPts = pProps?.GetFirstChild<Drawing.SpaceAfter>()?.GetFirstChild<Drawing.SpacingPoints>()?.Val?.Value;
+            if (saPts.HasValue) spaceAfter = saPts.Value / 100.0 * ptToPx;
+
+            // Bullet
+            string? bullet = null;
+            var bulletChar = pProps?.GetFirstChild<Drawing.CharacterBullet>()?.Char?.Value;
+            if (bulletChar != null) bullet = bulletChar;
+            else if (pProps?.GetFirstChild<Drawing.AutoNumberedBullet>() != null) bullet = "\u2022";
+
+            paraInfos.Add((para, fontSizePt, align, lineHeight, spaceBefore, spaceAfter, bullet));
         }
 
-        // Calculate total text height in px (pt → px: 1pt ≈ 1.333px at 96dpi)
-        const double ptToPx = 96.0 / 72.0;
+        // Calculate total text height
         double totalHeightPx = 0;
-        foreach (var (_, fontSizePt, _) in paraInfos)
+        foreach (var (_, fontSizePt, _, lineHeight, spaceBefore, spaceAfter, _) in paraInfos)
         {
-            totalHeightPx += fontSizePt * ptToPx * 1.2; // 1.2 line height
+            totalHeightPx += spaceBefore + fontSizePt * ptToPx * lineHeight + spaceAfter;
         }
 
         // Vertical alignment
@@ -528,10 +553,11 @@ public partial class PowerPointHandler
 
         // Render each paragraph
         double currentY = startY;
-        foreach (var (para, fontSizePt, align) in paraInfos)
+        foreach (var (para, fontSizePt, align, lineHeight, spaceBefore, spaceAfter, bullet) in paraInfos)
         {
+            currentY += spaceBefore;
             double fontSizePx = fontSizePt * ptToPx;
-            double lineHeightPx = fontSizePx * 1.2;
+            double lineHeightPx = fontSizePx * lineHeight;
             double baselineY = currentY + fontSizePx * 0.85;
 
             double textAnchorX = align switch
@@ -552,6 +578,10 @@ public partial class PowerPointHandler
             sb.Append($" font-size=\"{fontSizePx:0.##}\"");
             sb.Append($" font-family=\"Calibri, &apos;PingFang SC&apos;, &apos;Microsoft YaHei&apos;, sans-serif\"");
             sb.Append(">");
+
+            // Bullet character
+            if (bullet != null)
+                sb.Append($"<tspan fill=\"currentColor\">{SvgEncode(bullet)} </tspan>");
 
             foreach (var run in runs)
             {
@@ -599,7 +629,7 @@ public partial class PowerPointHandler
             }
 
             sb.Append("</text>");
-            currentY += lineHeightPx;
+            currentY += lineHeightPx + spaceAfter;
         }
     }
 
