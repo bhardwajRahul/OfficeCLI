@@ -113,7 +113,7 @@ static class CommandBuilder
         rootCommand.Add(closeCommand);
 
         // ==================== watch command ====================
-        var watchFileArg = new Argument<FileInfo>("file") { Description = "Office document path (.pptx, .xlsx)" };
+        var watchFileArg = new Argument<FileInfo>("file") { Description = "Office document path (.pptx, .xlsx, .docx)" };
         var watchPortOpt = new Option<int>("--port") { Description = "HTTP port for preview server" };
         watchPortOpt.DefaultValueFactory = _ => 18080;
 
@@ -137,6 +137,8 @@ static class CommandBuilder
                         initialHtml = ppt.ViewAsHtml();
                     else if (handler is OfficeCli.Handlers.ExcelHandler excel)
                         initialHtml = excel.ViewAsHtml();
+                    else if (handler is OfficeCli.Handlers.WordHandler word)
+                        initialHtml = word.ViewAsHtml();
                 }
                 catch { /* ignore — will show waiting page */ }
             }
@@ -152,7 +154,7 @@ static class CommandBuilder
         rootCommand.Add(watchCommand);
 
         // ==================== unwatch command ====================
-        var unwatchFileArg = new Argument<FileInfo>("file") { Description = "Office document path (.pptx, .xlsx)" };
+        var unwatchFileArg = new Argument<FileInfo>("file") { Description = "Office document path (.pptx, .xlsx, .docx)" };
         var unwatchCommand = new Command("unwatch", "Stop the watch preview server for the document");
         unwatchCommand.Add(unwatchFileArg);
 
@@ -246,6 +248,8 @@ static class CommandBuilder
                     html = pptHandler.ViewAsHtml(start, end);
                 else if (handler is OfficeCli.Handlers.ExcelHandler excelHandler)
                     html = excelHandler.ViewAsHtml();
+                else if (handler is OfficeCli.Handlers.WordHandler wordHandler)
+                    html = wordHandler.ViewAsHtml();
 
                 if (html != null)
                 {
@@ -270,10 +274,10 @@ static class CommandBuilder
                 }
                 else
                 {
-                    throw new OfficeCli.Core.CliException("HTML preview is only supported for .pptx and .xlsx files.")
+                    throw new OfficeCli.Core.CliException("HTML preview is only supported for .pptx, .xlsx, and .docx files.")
                     {
                         Code = "unsupported_type",
-                        Suggestion = "Use a .pptx or .xlsx file, or use mode 'text' or 'annotated' for other formats.",
+                        Suggestion = "Use a .pptx, .xlsx, or .docx file, or use mode 'text' or 'annotated' for other formats.",
                         ValidValues = ["text", "annotated", "outline", "stats", "issues"]
                     };
                 }
@@ -1420,6 +1424,8 @@ static class CommandBuilder
                         return pptH.ViewAsHtml();
                     if (handler is OfficeCli.Handlers.ExcelHandler excelH)
                         return excelH.ViewAsHtml();
+                    if (handler is OfficeCli.Handlers.WordHandler wordH)
+                        return wordH.ViewAsHtml();
                 }
                 if (mode.ToLowerInvariant() is "svg" or "g" && handler is OfficeCli.Handlers.PowerPointHandler pptSvg)
                 {
@@ -1681,6 +1687,11 @@ static class CommandBuilder
             WatchNotifier.NotifyIfWatching(filePath, new WatchMessage { Action = "full", FullHtml = excel.ViewAsHtml() });
             return;
         }
+        if (handler is OfficeCli.Handlers.WordHandler word)
+        {
+            WatchNotifier.NotifyIfWatching(filePath, new WatchMessage { Action = "full", FullHtml = word.ViewAsHtml() });
+            return;
+        }
         if (handler is not OfficeCli.Handlers.PowerPointHandler ppt) return;
         var slideNum = WatchMessage.ExtractSlideNum(changedPath);
         if (slideNum > 0)
@@ -1700,6 +1711,11 @@ static class CommandBuilder
         if (handler is OfficeCli.Handlers.ExcelHandler excel)
         {
             WatchNotifier.NotifyIfWatching(filePath, new WatchMessage { Action = "full", FullHtml = excel.ViewAsHtml() });
+            return;
+        }
+        if (handler is OfficeCli.Handlers.WordHandler word)
+        {
+            WatchNotifier.NotifyIfWatching(filePath, new WatchMessage { Action = "full", FullHtml = word.ViewAsHtml() });
             return;
         }
         if (handler is not OfficeCli.Handlers.PowerPointHandler ppt) return;
