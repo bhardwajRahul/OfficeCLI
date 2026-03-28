@@ -74,8 +74,12 @@ public partial class ExcelHandler
             for (int i = 0; i < catCount; i++)
             {
                 var dPt = dPts.FirstOrDefault(d =>
-                    d.Elements<OpenXmlCompositeElement>().FirstOrDefault(e => e.LocalName == "idx")
-                    ?.GetAttributes().FirstOrDefault(a => a.LocalName == "val").Value == i.ToString());
+                {
+                    var idxEl = d.Elements<OpenXmlCompositeElement>().FirstOrDefault(e => e.LocalName == "idx");
+                    if (idxEl == null) return false;
+                    var valAttr = idxEl.GetAttributes().FirstOrDefault(a => a.LocalName == "val");
+                    return valAttr.Value == i.ToString();
+                });
                 var spPr = dPt?.GetFirstChild<C.ChartShapeProperties>();
                 var fill = spPr?.GetFirstChild<Drawing.SolidFill>();
                 var rgb = fill?.GetFirstChild<Drawing.RgbColorModelHex>()?.Val?.Value;
