@@ -46,12 +46,35 @@ public partial class WordHandler
             }
         }
 
-        // 3. Apply paragraph-level rPr (pPr > rPr — "paragraph mark" formatting)
+        // 3. Resolve character style (rStyle) from the run's rPr
+        var rStyleId = run.RunProperties?.GetFirstChild<RunStyle>()?.Val?.Value;
+        if (rStyleId != null)
+        {
+            var rStyleChain = new List<Style>();
+            var rVisited = new HashSet<string>();
+            var curRStyleId = rStyleId;
+            while (curRStyleId != null && rVisited.Add(curRStyleId))
+            {
+                var rStyle = _doc.MainDocumentPart?.StyleDefinitionsPart?.Styles
+                    ?.Elements<Style>().FirstOrDefault(s => s.StyleId?.Value == curRStyleId);
+                if (rStyle == null) break;
+                rStyleChain.Add(rStyle);
+                curRStyleId = rStyle.BasedOn?.Val?.Value;
+            }
+            for (int i = rStyleChain.Count - 1; i >= 0; i--)
+            {
+                var sRPr = rStyleChain[i].StyleRunProperties;
+                if (sRPr != null)
+                    MergeRunProperties(effective, sRPr);
+            }
+        }
+
+        // 4. Apply paragraph mark rPr (pPr > rPr) — in text boxes this carries the default formatting
         var paraMarkRPr = para.ParagraphProperties?.ParagraphMarkRunProperties;
         if (paraMarkRPr != null)
             MergeRunProperties(effective, paraMarkRPr);
 
-        // 4. Apply run's own rPr (highest priority)
+        // 5. Apply run's own direct rPr (highest priority, excluding rStyle which was resolved above)
         if (run.RunProperties != null)
             MergeRunProperties(effective, run.RunProperties);
 
