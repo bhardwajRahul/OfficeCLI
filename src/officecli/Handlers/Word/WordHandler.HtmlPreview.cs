@@ -486,18 +486,12 @@ public partial class WordHandler
     {
         if (overlaidImages.Count == 0)
         {
-            RenderDrawingHtml(sb, groupDrawing);
+            RenderDrawingHtml(sb, groupDrawing, null);
             return;
         }
 
-        // Inject floating images into the group's first text box
-        _pendingFloatImages = overlaidImages;
-        RenderDrawingHtml(sb, groupDrawing);
-        _pendingFloatImages = null;
+        RenderDrawingHtml(sb, groupDrawing, overlaidImages);
     }
-
-    /// <summary>Images to float-inject into the next text box rendered.</summary>
-    private List<Drawing>? _pendingFloatImages;
 
     // ==================== Drawing Rendering (images, groups, shapes) ====================
 
@@ -531,7 +525,7 @@ public partial class WordHandler
         return false;
     }
 
-    private void RenderDrawingHtml(StringBuilder sb, Drawing drawing)
+    private void RenderDrawingHtml(StringBuilder sb, Drawing drawing, List<Drawing>? floatImages = null)
     {
         // Check for groups/shapes first (text boxes, decorated shapes)
         var group = drawing.Descendants().FirstOrDefault(e => e.LocalName == "wgp");
@@ -544,7 +538,7 @@ public partial class WordHandler
 
             if (groupWidthEmu > 0 && groupHeightEmu > 0)
             {
-                RenderGroupHtml(sb, group, groupWidthEmu, groupHeightEmu);
+                RenderGroupHtml(sb, group, groupWidthEmu, groupHeightEmu, floatImages);
                 return;
             }
         }
@@ -558,7 +552,7 @@ public partial class WordHandler
             long shapeHeight = extent?.Cy?.Value ?? 0;
             if (shapeWidth > 0 && shapeHeight > 0)
             {
-                RenderShapeHtml(sb, shape, 0, 0, shapeWidth, shapeHeight, shapeWidth, shapeHeight);
+                RenderShapeHtml(sb, shape, 0, 0, shapeWidth, shapeHeight, shapeWidth, shapeHeight, floatImages);
                 return;
             }
         }
@@ -602,13 +596,21 @@ public partial class WordHandler
 
             var docProps = drawing.Descendants<DW.DocProperties>().FirstOrDefault();
             var alt = docProps?.Description?.Value ?? docProps?.Name?.Value ?? "image";
+            var dataUri = $"data:{contentType};base64,{base64}";
 
-            // Crop support: a:srcRect on blipFill
-            var cropCss = GetCropCss(drawing);
-            var styleParts = new List<string> { "max-width:100%", "height:auto" };
-            if (!string.IsNullOrEmpty(cropCss)) styleParts.Add(cropCss);
-
-            sb.Append($"<img src=\"data:{contentType};base64,{base64}\" alt=\"{HtmlEncode(alt)}\"{widthAttr}{heightAttr} style=\"{string.Join(";", styleParts)}\">");
+            // Crop support: container-based cropping
+            var crop = GetCropPercents(drawing);
+            if (crop.HasValue)
+            {
+                long wPx = 0, hPx = 0;
+                if (extent is DW.Extent dw2) { wPx = (dw2.Cx?.Value ?? 0) / 9525; hPx = (dw2.Cy?.Value ?? 0) / 9525; }
+                else if (extent is A.Extents a2) { wPx = (a2.Cx?.Value ?? 0) / 9525; hPx = (a2.Cy?.Value ?? 0) / 9525; }
+                RenderCroppedImage(sb, dataUri, wPx, hPx, crop.Value.l, crop.Value.t, crop.Value.r, crop.Value.b, HtmlEncode(alt));
+            }
+            else
+            {
+                sb.Append($"<img src=\"{dataUri}\" alt=\"{HtmlEncode(alt)}\"{widthAttr}{heightAttr} style=\"max-width:100%;height:auto\">");
+            }
         }
         catch
         {
@@ -617,31 +619,48 @@ public partial class WordHandler
     }
 
     /// <summary>
-    /// Extract CSS clip-path from a:srcRect crop data.
-    /// srcRect l/t/r/b are in 1/1000 of a percent (e.g., 25000 = 25%).
-    /// Negative values mean extend (no crop on that side).
+    /// Get crop percentages from a:srcRect.
+    /// Values are in 1/1000 of a percent (e.g., 25000 = 25%).
+    /// Negative values mean extend (treated as 0).
+    /// Returns (left, top, right, bottom) as CSS percentages, or null if no crop.
     /// </summary>
-    private static string GetCropCss(OpenXmlElement container)
+    private static (double l, double t, double r, double b)? GetCropPercents(OpenXmlElement container)
     {
-        // Look for srcRect in blipFill
         var srcRect = container.Descendants().FirstOrDefault(e => e.LocalName == "srcRect");
-        if (srcRect == null) return "";
+        if (srcRect == null) return null;
 
-        var l = GetIntAttr(srcRect, "l");
-        var t = GetIntAttr(srcRect, "t");
-        var r = GetIntAttr(srcRect, "r");
-        var b = GetIntAttr(srcRect, "b");
+        var l = Math.Max(0, GetIntAttr(srcRect, "l") / 1000.0);
+        var t = Math.Max(0, GetIntAttr(srcRect, "t") / 1000.0);
+        var r = Math.Max(0, GetIntAttr(srcRect, "r") / 1000.0);
+        var b = Math.Max(0, GetIntAttr(srcRect, "b") / 1000.0);
 
-        // Skip if no positive crop values
-        if (l <= 0 && t <= 0 && r <= 0 && b <= 0) return "";
+        if (l == 0 && t == 0 && r == 0 && b == 0) return null;
+        return (l, t, r, b);
+    }
 
-        // Convert from 1/1000 percent to CSS percent
-        var top = Math.Max(0, t / 1000.0);
-        var right = Math.Max(0, r / 1000.0);
-        var bottom = Math.Max(0, b / 1000.0);
-        var left = Math.Max(0, l / 1000.0);
+    /// <summary>
+    /// Render a cropped image using a container div with overflow:hidden.
+    /// The image is scaled to its original size and positioned to show only the cropped region.
+    /// </summary>
+    private static void RenderCroppedImage(StringBuilder sb, string dataUri, long displayWidthPx, long displayHeightPx,
+        double cropL, double cropT, double cropR, double cropB, string alt)
+    {
+        // The display size is the cropped result size.
+        // Original image visible fraction: (1 - cropL/100 - cropR/100) horizontally, (1 - cropT/100 - cropB/100) vertically.
+        var fracW = 1.0 - cropL / 100.0 - cropR / 100.0;
+        var fracH = 1.0 - cropT / 100.0 - cropB / 100.0;
+        if (fracW <= 0) fracW = 1; if (fracH <= 0) fracH = 1;
 
-        return $"clip-path:inset({top:0.##}% {right:0.##}% {bottom:0.##}% {left:0.##}%)";
+        // Original image size in CSS
+        var imgW = displayWidthPx / fracW;
+        var imgH = displayHeightPx / fracH;
+        // Offset to show the cropped region
+        var offsetX = -imgW * (cropL / 100.0);
+        var offsetY = -imgH * (cropT / 100.0);
+
+        sb.Append($"<div style=\"display:inline-block;width:{displayWidthPx}px;height:{displayHeightPx}px;overflow:hidden\">");
+        sb.Append($"<img src=\"{dataUri}\" alt=\"{alt}\" style=\"width:{imgW:0}px;height:{imgH:0}px;margin-left:{offsetX:0}px;margin-top:{offsetY:0}px\">");
+        sb.Append("</div>");
     }
 
     private static int GetIntAttr(OpenXmlElement el, string attrName)
@@ -652,7 +671,8 @@ public partial class WordHandler
 
     // ==================== Group / Shape Rendering ====================
 
-    private void RenderGroupHtml(StringBuilder sb, OpenXmlElement group, long groupWidthEmu, long groupHeightEmu)
+    private void RenderGroupHtml(StringBuilder sb, OpenXmlElement group, long groupWidthEmu, long groupHeightEmu,
+        List<Drawing>? floatImages = null)
     {
         var widthPx = groupWidthEmu / 9525;
         var heightPx = groupHeightEmu / 9525;
@@ -695,7 +715,9 @@ public partial class WordHandler
                     if (ext != null) { extCx = GetLongAttr(ext, "cx"); extCy = GetLongAttr(ext, "cy"); }
                 }
 
-                RenderShapeHtml(sb, child, offX - chOffX, offY - chOffY, extCx, extCy, chExtCx, chExtCy);
+                // Pass floatImages to first text box shape, then clear
+                RenderShapeHtml(sb, child, offX - chOffX, offY - chOffY, extCx, extCy, chExtCx, chExtCy, floatImages);
+                floatImages = null; // only inject into first shape
             }
         }
 
@@ -703,7 +725,8 @@ public partial class WordHandler
     }
 
     private void RenderShapeHtml(StringBuilder sb, OpenXmlElement shape, long offX, long offY,
-        long extCx, long extCy, long coordSpaceCx, long coordSpaceCy)
+        long extCx, long extCy, long coordSpaceCx, long coordSpaceCy,
+        List<Drawing>? floatImages = null)
     {
         // Convert child coordinates to percentage of group
         double leftPct = coordSpaceCx > 0 ? (double)offX / coordSpaceCx * 100 : 0;
@@ -722,10 +745,16 @@ public partial class WordHandler
         var txbx = shape.LocalName == "pic" ? null
             : shape.Descendants().FirstOrDefault(e => e.LocalName == "txbxContent");
 
+        // Rotation from xfrm rot attribute (60000ths of a degree)
+        var xfrm = spPr?.Elements().FirstOrDefault(e => e.LocalName == "xfrm");
+        var rot = GetLongAttr(xfrm, "rot");
+        var rotCss = rot != 0 ? $";transform:rotate({rot / 60000.0:0.##}deg)" : "";
+
         // Build style
         var style = $"position:absolute;left:{leftPct:0.##}%;top:{topPct:0.##}%;width:{widthPct:0.##}%;height:{heightPct:0.##}%";
         if (!string.IsNullOrEmpty(fillCss)) style += $";{fillCss}";
         if (!string.IsNullOrEmpty(borderCss)) style += $";{borderCss}";
+        style += rotCss;
 
         // Get body properties for text layout
         var bodyPr = shape.Elements().FirstOrDefault(e => e.LocalName == "bodyPr");
@@ -748,9 +777,9 @@ public partial class WordHandler
             sb.Append("<div style=\"width:100%\">");
 
             // Inject pending float images into this text box
-            if (_pendingFloatImages != null && _pendingFloatImages.Count > 0)
+            if (floatImages != null && floatImages.Count > 0)
             {
-                foreach (var imgDrawing in _pendingFloatImages)
+                foreach (var imgDrawing in floatImages)
                 {
                     var imgBlip = imgDrawing.Descendants<A.Blip>().FirstOrDefault();
                     if (imgBlip?.Embed?.Value == null) continue;
@@ -765,14 +794,41 @@ public partial class WordHandler
                         var imgExtent = imgDrawing.Descendants<DW.Extent>().FirstOrDefault();
                         var imgW = imgExtent?.Cx?.Value > 0 ? imgExtent.Cx.Value / 9525 : 100;
                         var imgH = imgExtent?.Cy?.Value > 0 ? imgExtent.Cy.Value / 9525 : 100;
-                        var cropCss = GetCropCss(imgDrawing);
-                        var imgStyle = $"float:left;width:{imgW}px;height:{imgH}px;object-fit:cover;margin:5px 10px 5px 0";
-                        if (!string.IsNullOrEmpty(cropCss)) imgStyle += $";{cropCss}";
-                        sb.Append($"<img src=\"data:{imgPart.ContentType};base64,{imgBase64}\" style=\"{imgStyle}\">");
+                        var imgDataUri = $"data:{imgPart.ContentType};base64,{imgBase64}";
+                        // Read distT/distB/distL/distR for image margins (EMU)
+                        var inline = imgDrawing.Descendants<DW.Inline>().FirstOrDefault();
+                        var anchor = imgDrawing.Descendants<DW.Anchor>().FirstOrDefault();
+                        long distT = 0, distB = 0, distL = 0, distR = 0;
+                        if (inline != null)
+                        {
+                            distT = (long)(inline.DistanceFromTop?.Value ?? 0);
+                            distB = (long)(inline.DistanceFromBottom?.Value ?? 0);
+                            distL = (long)(inline.DistanceFromLeft?.Value ?? 0);
+                            distR = (long)(inline.DistanceFromRight?.Value ?? 0);
+                        }
+                        else if (anchor != null)
+                        {
+                            distT = (long)(anchor.DistanceFromTop?.Value ?? 0);
+                            distB = (long)(anchor.DistanceFromBottom?.Value ?? 0);
+                            distL = (long)(anchor.DistanceFromLeft?.Value ?? 0);
+                            distR = (long)(anchor.DistanceFromRight?.Value ?? 0);
+                        }
+                        var marginCss = $"margin:{distT/9525}px {distR/9525}px {distB/9525}px {distL/9525}px";
+                        var crop = GetCropPercents(imgDrawing);
+                        if (crop.HasValue)
+                        {
+                            sb.Append($"<div style=\"float:left;{marginCss}\">");
+                            RenderCroppedImage(sb, imgDataUri, imgW, imgH, crop.Value.l, crop.Value.t, crop.Value.r, crop.Value.b, "");
+                            sb.Append("</div>");
+                        }
+                        else
+                        {
+                            sb.Append($"<img src=\"{imgDataUri}\" style=\"float:left;width:{imgW}px;height:{imgH}px;object-fit:cover;{marginCss}\">");
+                        }
                     }
                     catch { }
                 }
-                _pendingFloatImages = null;
+                floatImages = null;
             }
 
             foreach (var para in txbx.Descendants<Paragraph>())
@@ -1540,11 +1596,11 @@ public partial class WordHandler
         .doc-footer {{ border-bottom: none; border-top: 1px solid #e0e0e0;
             margin-top: 1em; padding-top: 0.5em; margin-bottom: 0; }}
         h1, h2, h3, h4, h5, h6 {{ line-height: 1.4; }}
-        h1 {{ font-size: 22pt; margin-top: 0.5em; margin-bottom: 0.3em; }}
-        h2 {{ font-size: 16pt; margin-top: 0.4em; margin-bottom: 0.2em; }}
-        h3 {{ font-size: 13pt; margin-top: 0.3em; margin-bottom: 0.2em; }}
-        h4 {{ font-size: 11pt; margin-top: 0.2em; margin-bottom: 0.1em; }}
-        h5 {{ font-size: 10pt; }} h6 {{ font-size: 9pt; }}
+        h1 {{ margin-top: 0.5em; margin-bottom: 0.3em; }}
+        h2 {{ margin-top: 0.4em; margin-bottom: 0.2em; }}
+        h3 {{ margin-top: 0.3em; margin-bottom: 0.2em; }}
+        h4 {{ margin-top: 0.2em; margin-bottom: 0.1em; }}
+        h5, h6 {{ margin-top: 0.1em; margin-bottom: 0.1em; }}
         p {{ margin: 0.1em 0; }}
         p.empty {{ margin: 0; line-height: 0.8; font-size: 6pt; }}
         a {{ color: #2B579A; }} a:hover {{ color: #1a3c6e; }}
