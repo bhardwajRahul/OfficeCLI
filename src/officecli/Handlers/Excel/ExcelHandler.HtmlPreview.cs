@@ -610,22 +610,44 @@ public partial class ExcelHandler
         return null;
     }
 
+    // Standard Excel indexed color palette (first 64 colors)
+    private static readonly string[] IndexedColors = [
+        "#000000","#FFFFFF","#FF0000","#00FF00","#0000FF","#FFFF00","#FF00FF","#00FFFF",
+        "#000000","#FFFFFF","#FF0000","#00FF00","#0000FF","#FFFF00","#FF00FF","#00FFFF",
+        "#800000","#008000","#000080","#808000","#800080","#008080","#C0C0C0","#808080",
+        "#9999FF","#993366","#FFFFCC","#CCFFFF","#660066","#FF8080","#0066CC","#CCCCFF",
+        "#000080","#FF00FF","#FFFF00","#00FFFF","#800080","#800000","#008080","#0000FF",
+        "#00CCFF","#CCFFFF","#CCFFCC","#FFFF99","#99CCFF","#FF99CC","#CC99FF","#FFCC99",
+        "#3366FF","#33CCCC","#99CC00","#FFCC00","#FF9900","#FF6600","#666699","#969696",
+        "#003366","#339966","#003300","#333300","#993300","#993366","#333399","#333333"
+    ];
+
     private static string? ResolveColorRgb(ColorType? color)
     {
         if (color?.Rgb?.Value != null)
             return FormatColorForCss(color.Rgb.Value);
+        if (color?.Indexed?.Value != null)
+        {
+            var idx = (int)color.Indexed.Value;
+            if (idx >= 0 && idx < IndexedColors.Length)
+                return IndexedColors[idx];
+            if (idx == 64) return null; // system foreground (context dependent)
+            if (idx == 65) return null; // system background
+        }
         if (color?.Theme?.Value != null)
         {
             return color.Theme.Value switch
             {
-                0 => "#FFFFFF",
-                1 => "#000000",
-                4 => "#4472C4",
-                5 => "#ED7D31",
-                6 => "#A5A5A5",
-                7 => "#FFC000",
-                8 => "#5B9BD5",
-                9 => "#70AD47",
+                0 => "#FFFFFF", // lt1
+                1 => "#000000", // dk1
+                2 => "#E7E6E6", // lt2
+                3 => "#44546A", // dk2
+                4 => "#4472C4", // accent1
+                5 => "#ED7D31", // accent2
+                6 => "#A5A5A5", // accent3
+                7 => "#FFC000", // accent4
+                8 => "#5B9BD5", // accent5
+                9 => "#70AD47", // accent6
                 _ => null
             };
         }
@@ -1015,7 +1037,6 @@ public partial class ExcelHandler
             vertical-align: bottom;
             max-width: 500px;
             word-break: break-all; /* CJK text wrapping support */
-            height: 20px;
         }
         .empty-sheet {
             padding: 40px;
