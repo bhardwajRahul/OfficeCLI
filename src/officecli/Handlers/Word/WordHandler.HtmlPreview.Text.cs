@@ -301,9 +301,8 @@ public partial class WordHandler
         var enPart = _doc.MainDocumentPart?.EndnotesPart;
         if (enPart?.Endnotes == null) return;
 
-        sb.AppendLine("<hr style=\"margin-top:2em;border:none;border-top:1px solid #ccc\">");
-        sb.AppendLine("<div class=\"endnotes\" style=\"font-size:9pt;color:#555\">");
-        sb.AppendLine("<p style=\"font-weight:bold;margin-bottom:0.5em\">Endnotes</p>");
+        sb.AppendLine("<div class=\"endnotes\">");
+        sb.AppendLine("<hr style=\"margin-top:2em;margin-bottom:0.5em;border:none;border-top:1px solid #ccc;width:33%\">");
 
         var enFmt = GetEndnoteNumFmt();
         int num = 0;
@@ -314,14 +313,14 @@ public partial class WordHandler
             if (en == null) continue;
 
             var enLabel = FormatNoteNumber(num, enFmt);
-            sb.Append($"<div id=\"en{enId}\" style=\"margin:0.3em 0\"><sup>{enLabel}</sup> ");
+            sb.Append($"<div id=\"en{enId}\" style=\"margin:0.3em 0;text-indent:21.6pt\"><sup>{enLabel}</sup> ");
             var enParas = en.Elements<Paragraph>().ToList();
             for (int pi = 0; pi < enParas.Count; pi++)
             {
                 RenderParagraphContentHtml(sb, enParas[pi]);
                 if (pi < enParas.Count - 1) sb.Append("<br>");
             }
-            sb.AppendLine($" <a href=\"#enref{enId}\" style=\"text-decoration:none\">\u21A9</a></div>");
+            sb.AppendLine("</div>");
         }
         sb.AppendLine("</div>");
     }
