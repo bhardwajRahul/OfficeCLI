@@ -168,13 +168,19 @@ public partial class WordHandler
             var floatCss = "";
             if (anchor != null)
             {
-                // Check wrap type for float direction
-                var wrapFloat = anchor.Elements().Any(e => e.LocalName == "wrapSquare" || e.LocalName == "wrapTight");
-                if (wrapFloat)
+                var hPos = anchor.GetFirstChild<DW.HorizontalPosition>();
+                var hAlign = hPos?.Descendants().FirstOrDefault(e => e.LocalName == "align")?.InnerText;
+                var hPosFrom = hPos?.RelativeFrom?.Value;
+
+                // wrapTopAndBottom → centered block image (no text beside it)
+                var wrapTopBottom = anchor.Elements().Any(e => e.LocalName == "wrapTopAndBottom");
+                if (wrapTopBottom)
                 {
-                    var hPos = anchor.GetFirstChild<DW.HorizontalPosition>();
-                    var hAlign = hPos?.Descendants().FirstOrDefault(e => e.LocalName == "align")?.InnerText;
-                    var hPosFrom = hPos?.RelativeFrom?.Value;
+                    floatCss = "display:block;margin:8px auto";
+                }
+                // wrapSquare / wrapTight → float left or right
+                else if (anchor.Elements().Any(e => e.LocalName == "wrapSquare" || e.LocalName == "wrapTight"))
+                {
                     var isRight = hAlign == "right"
                         || hPosFrom == DW.HorizontalRelativePositionValues.RightMargin;
                     // Also check posOffset — if offset > half page width, float right
@@ -187,6 +193,25 @@ public partial class WordHandler
                     floatCss = isRight
                         ? "float:right;margin:0 0 8px 8px"
                         : "float:left;margin:0 8px 8px 0";
+
+                    // Anchored at top of margin — emit marker for relocation to page start
+                    var vPos = anchor.GetFirstChild<DW.VerticalPosition>();
+                    var vAlign = vPos?.Descendants().FirstOrDefault(e => e.LocalName == "align")?.InnerText;
+                    var vFrom = vPos?.RelativeFrom?.Value;
+                    if (vAlign == "top" && vFrom == DW.VerticalRelativePositionValues.Margin)
+                    {
+                        var fc = isRight ? "float:right;margin:0 0 8px 8px" : "float:left;margin:0 8px 8px 0";
+                        var cropVal = GetCropPercents(drawing);
+                        var imgHtml = new StringBuilder();
+                        if (cropVal.HasValue)
+                            RenderCroppedImage(imgHtml, dataUri, widthPx, heightPx, cropVal.Value.l, cropVal.Value.t, cropVal.Value.r, cropVal.Value.b, HtmlEncode(alt), fc);
+                        else
+                            imgHtml.Append($"<img src=\"{dataUri}\" alt=\"{HtmlEncode(alt)}\" width=\"{widthPx}\" height=\"{heightPx}\" style=\"max-width:100%;height:auto;{fc}\">");
+                        var markerId = $"TOP_ANCHOR_{_ctx.TopAnchoredImages.Count}";
+                        _ctx.TopAnchoredImages.Add((markerId, imgHtml.ToString()));
+                        sb.Append($"<!--{markerId}-->");
+                        return;
+                    }
                 }
             }
 

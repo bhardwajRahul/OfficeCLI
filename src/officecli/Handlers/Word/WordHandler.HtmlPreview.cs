@@ -20,6 +20,7 @@ public partial class WordHandler
     {
         public List<int> FootnoteRefs { get; } = new();
         public List<int> EndnoteRefs { get; } = new();
+        public List<(string markerId, string imgHtml)> TopAnchoredImages { get; } = new();
         public PageLayout? CachedPageLayout { get; set; }
         public bool RenderingBody { get; set; }
 
@@ -104,17 +105,35 @@ public partial class WordHandler
         RenderEndnotesHtml(endnotesSb);
         var endnotesHtml = endnotesSb.ToString();
 
-        // Split body content on page breaks into pages
         var bodyContent = bodySb.ToString();
+
+        // Split body content on page breaks into pages
         var pages = bodyContent.Split("<!--PAGE_BREAK-->");
 
         // Filter out truly empty trailing page (empty string after final page break)
+        // Also relocate top-anchored images to the start of their page
+        var markerMap = _ctx.TopAnchoredImages.ToDictionary(t => $"<!--{t.markerId}-->", t => t.imgHtml);
         var pageList = new List<string>();
         for (int i = 0; i < pages.Length; i++)
         {
             var pc = pages[i].Trim();
             if (string.IsNullOrEmpty(pc) && i == pages.Length - 1)
                 continue; // Skip completely empty trailing split
+            // Move top-anchored images to page start
+            if (markerMap.Count > 0)
+            {
+                var prepend = new StringBuilder();
+                foreach (var (marker, imgHtml) in markerMap)
+                {
+                    if (pc.Contains(marker))
+                    {
+                        prepend.Append(imgHtml);
+                        pc = pc.Replace(marker, "");
+                    }
+                }
+                if (prepend.Length > 0)
+                    pc = prepend.ToString() + pc;
+            }
             pageList.Add(pc);
         }
 
