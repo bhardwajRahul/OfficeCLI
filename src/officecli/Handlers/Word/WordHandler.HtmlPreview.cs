@@ -458,7 +458,7 @@ public partial class WordHandler
                 var nextCols = GetNextSectionColumnCount(elements, ei, bodyColCount);
                 if (nextCols > 1 && !inMultiColumn)
                 {
-                    sb.AppendLine($"<div style=\"column-count:{nextCols};column-gap:36pt\">");
+                    sb.AppendLine($"<div style=\"column-count:{nextCols};column-gap:36pt;column-fill:balance\">");
                     inMultiColumn = true;
                 }
                 else if (nextCols <= 1 && inMultiColumn)
