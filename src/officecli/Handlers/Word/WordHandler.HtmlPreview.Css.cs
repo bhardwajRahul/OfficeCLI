@@ -285,13 +285,13 @@ public partial class WordHandler
             if (indent != null)
             {
                 if (indent.Left?.Value is string leftTwips && leftTwips != "0")
-                    parts.Add($"margin-left:{TwipsToPx(leftTwips):0.#}px");
+                    parts.Add($"margin-left:{Units.TwipsToPt(leftTwips):0.##}pt");
                 if (indent.Right?.Value is string rightTwips && rightTwips != "0")
-                    parts.Add($"margin-right:{TwipsToPx(rightTwips):0.#}px");
+                    parts.Add($"margin-right:{Units.TwipsToPt(rightTwips):0.##}pt");
                 if (indent.FirstLine?.Value is string firstLineTwips && firstLineTwips != "0")
-                    parts.Add($"text-indent:{TwipsToPx(firstLineTwips):0.#}px");
+                    parts.Add($"text-indent:{Units.TwipsToPt(firstLineTwips):0.##}pt");
                 if (indent.Hanging?.Value is string hangTwips && hangTwips != "0")
-                    parts.Add($"text-indent:-{TwipsToPx(hangTwips):0.#}px");
+                    parts.Add($"text-indent:-{Units.TwipsToPt(hangTwips):0.##}pt");
             }
         }
 
@@ -309,7 +309,7 @@ public partial class WordHandler
             var beforeLinesVal = pProps.SpacingBetweenLines?.BeforeLines?.Value
                                  ?? styleSpacing?.BeforeLines?.Value;
             if (beforeVal is string beforeTwips && beforeTwips != "0")
-                parts.Add($"margin-top:{TwipsToPx(beforeTwips):0.#}px");
+                parts.Add($"margin-top:{Units.TwipsToPt(beforeTwips):0.##}pt");
             else if (beforeLinesVal is int beforeLines && beforeLines != 0)
                 parts.Add($"margin-top:{beforeLines / 100.0:0.##}em");
 
@@ -319,7 +319,7 @@ public partial class WordHandler
             var afterLinesVal = pProps.SpacingBetweenLines?.AfterLines?.Value
                                 ?? styleSpacing?.AfterLines?.Value;
             if (afterVal is string afterTwips && afterTwips != "0")
-                parts.Add($"margin-bottom:{TwipsToPx(afterTwips):0.#}px");
+                parts.Add($"margin-bottom:{Units.TwipsToPt(afterTwips):0.##}pt");
             else if (afterLinesVal is int afterLines && afterLines != 0)
                 parts.Add($"margin-bottom:{afterLines / 100.0:0.##}em");
 
@@ -337,7 +337,7 @@ public partial class WordHandler
                 }
                 else if (rule == "exact" || rule == "atLeast")
                 {
-                    parts.Add($"line-height:{TwipsToPx(lv):0.#}px");
+                    parts.Add($"line-height:{Units.TwipsToPt(lv):0.##}pt");
                 }
             }
         }
@@ -529,14 +529,14 @@ public partial class WordHandler
                     if (!parts.Any(p => p.StartsWith("margin-top")))
                     {
                         if (spacing.Before?.Value is string b && b != "0")
-                            parts.Add($"margin-top:{TwipsToPx(b):0.#}px");
+                            parts.Add($"margin-top:{Units.TwipsToPt(b):0.##}pt");
                         else if (spacing.BeforeLines?.Value is int bl && bl != 0)
                             parts.Add($"margin-top:{bl / 100.0:0.##}em");
                     }
                     if (!parts.Any(p => p.StartsWith("margin-bottom")))
                     {
                         if (spacing.After?.Value is string a && a != "0")
-                            parts.Add($"margin-bottom:{TwipsToPx(a):0.#}px");
+                            parts.Add($"margin-bottom:{Units.TwipsToPt(a):0.##}pt");
                         else if (spacing.AfterLines?.Value is int al && al != 0)
                             parts.Add($"margin-bottom:{al / 100.0:0.##}em");
                     }
@@ -553,13 +553,13 @@ public partial class WordHandler
                 if (ind != null)
                 {
                     if (ind.Left?.Value is string leftTwips && leftTwips != "0" && !parts.Any(p => p.StartsWith("margin-left")))
-                        parts.Add($"margin-left:{TwipsToPx(leftTwips):0.#}px");
+                        parts.Add($"margin-left:{Units.TwipsToPt(leftTwips):0.##}pt");
                     if (ind.Right?.Value is string rightTwips && rightTwips != "0" && !parts.Any(p => p.StartsWith("margin-right")))
-                        parts.Add($"margin-right:{TwipsToPx(rightTwips):0.#}px");
+                        parts.Add($"margin-right:{Units.TwipsToPt(rightTwips):0.##}pt");
                     if (ind.FirstLine?.Value is string fl && fl != "0" && !parts.Any(p => p.StartsWith("text-indent")))
-                        parts.Add($"text-indent:{TwipsToPx(fl):0.#}px");
+                        parts.Add($"text-indent:{Units.TwipsToPt(fl):0.##}pt");
                     if (ind.Hanging?.Value is string hg && hg != "0" && !parts.Any(p => p.StartsWith("text-indent")))
-                        parts.Add($"text-indent:-{TwipsToPx(hg):0.#}px");
+                        parts.Add($"text-indent:-{Units.TwipsToPt(hg):0.##}pt");
                 }
 
                 var shadingFill = ResolveShadingFill(pPr.Shading);
@@ -820,7 +820,7 @@ public partial class WordHandler
         {
             var type = tcPr.TableCellWidth?.Type?.InnerText;
             if (type == "dxa")
-                parts.Add($"width:{w / 1440.0 * 96:0}px");
+                parts.Add($"width:{w / 20.0:0.##}pt");
             else if (type == "pct")
                 parts.Add($"width:{w / 50.0:0.#}%");
         }
@@ -835,7 +835,7 @@ public partial class WordHandler
             var padRight = margins.RightMargin?.Width?.Value ?? margins.EndMargin?.Width?.Value;
             if (padTop != null || padBot != null || padLeft != null || padRight != null)
             {
-                parts.Add($"padding:{TwipsToPxStr(padTop ?? "0")} {TwipsToPxStr(padRight ?? "0")} {TwipsToPxStr(padBot ?? "0")} {TwipsToPxStr(padLeft ?? "0")}");
+                parts.Add($"padding:{Units.TwipsToPtStr(padTop ?? "0")} {Units.TwipsToPtStr(padRight ?? "0")} {Units.TwipsToPtStr(padBot ?? "0")} {Units.TwipsToPtStr(padLeft ?? "0")}");
             }
         }
 
@@ -907,16 +907,7 @@ public partial class WordHandler
         return null;
     }
 
-    private static double TwipsToPx(string twipsStr)
-    {
-        if (!int.TryParse(twipsStr, out var twips)) return 0;
-        return Math.Round(twips / 1440.0 * 96, 1);
-    }
-
-    private static string TwipsToPxStr(string twipsStr)
-    {
-        return $"{TwipsToPx(twipsStr):0.#}px";
-    }
+    // Unit conversions moved to shared Units class (Core/Units.cs).
 
     private static string? HighlightToCssColor(string highlight) => highlight.ToLowerInvariant() switch
     {

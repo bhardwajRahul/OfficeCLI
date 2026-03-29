@@ -24,8 +24,8 @@ public partial class PowerPointHandler
 
         // Get slide dimensions
         var (slideWidthEmu, slideHeightEmu) = GetSlideSize();
-        double slideWidthCm = slideWidthEmu / 360000.0;
-        double slideHeightCm = slideHeightEmu / 360000.0;
+        double slideWidthPt = Units.EmuToPt(slideWidthEmu);
+        double slideHeightPt = Units.EmuToPt(slideHeightEmu);
 
         // Resolve theme colors once for the whole presentation
         var themeColors = ResolveThemeColorMap();
@@ -41,7 +41,7 @@ public partial class PowerPointHandler
         // Three.js for 3D model rendering (importmap for ES module support)
         sb.AppendLine(@"<script type=""importmap"">{""imports"":{""three"":""https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"",""three/addons/"":""https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/""}}</script>");
         sb.AppendLine("<style>");
-        sb.AppendLine(GenerateCss(slideWidthCm, slideHeightCm));
+        sb.AppendLine(GenerateCss(slideWidthPt, slideHeightPt));
         sb.AppendLine("</style>");
         // Auto-hide sidebar in headless/automated browsers (screenshot, Playwright, etc.)
         sb.AppendLine("<script>if(navigator.webdriver||/HeadlessChrome/.test(navigator.userAgent))document.documentElement.classList.add('headless')</script>");
@@ -187,11 +187,11 @@ public partial class PowerPointHandler
 
     // ==================== CSS ====================
 
-    private static string GenerateCss(double slideWidthCm, double slideHeightCm)
+    private static string GenerateCss(double slideWidthPt, double slideHeightPt)
     {
-        var aspect = slideWidthCm / slideHeightCm;
+        var aspect = slideWidthPt / slideHeightPt;
         // Dynamic CSS variables + static CSS from embedded resource
-        var dynamicVars = $":root{{--slide-design-w:{slideWidthCm:0.###}cm;--slide-design-h:{slideHeightCm:0.###}cm;--slide-aspect:{aspect:0.####};}}\n";
+        var dynamicVars = $":root{{--slide-design-w:{slideWidthPt:0.##}pt;--slide-design-h:{slideHeightPt:0.##}pt;--slide-aspect:{aspect:0.####};}}\n";
         return dynamicVars + LoadEmbeddedResource("Resources.preview.css");
     }
 
