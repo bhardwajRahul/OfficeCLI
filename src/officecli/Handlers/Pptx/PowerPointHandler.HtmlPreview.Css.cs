@@ -458,9 +458,9 @@ public partial class PowerPointHandler
                     avVal = parsed;
             }
             var radiusEmu = minSide * avVal / 100000;
-            var radiusCm = radiusEmu / 360000.0;
-            var r = $"{radiusCm:0.##}cm";
-            if (minSide <= 0) r = "8px"; // fallback if no dimensions
+            var radiusPt = Units.EmuToPt(radiusEmu);
+            var r = $"{radiusPt:0.##}pt";
+            if (minSide <= 0) r = "6pt"; // fallback if no dimensions
 
             return preset switch
             {
@@ -820,10 +820,7 @@ public partial class PowerPointHandler
 
     // ==================== Utility ====================
 
-    private static double EmuToCm(long emu)
-    {
-        return Math.Round(emu / 360000.0, 3);
-    }
+    // Unit conversions moved to shared Units class (Core/Units.cs).
 
     private static string HtmlEncode(string text)
     {

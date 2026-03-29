@@ -56,9 +56,9 @@ public partial class PowerPointHandler
 
             // Indent
             if (pProps?.Indent?.HasValue == true)
-                paraStyles.Add($"text-indent:{EmuToCm(pProps.Indent.Value)}cm");
+                paraStyles.Add($"text-indent:{Units.EmuToPt(pProps.Indent.Value)}pt");
             if (pProps?.LeftMargin?.HasValue == true)
-                paraStyles.Add($"margin-left:{EmuToCm(pProps.LeftMargin.Value)}cm");
+                paraStyles.Add($"margin-left:{Units.EmuToPt(pProps.LeftMargin.Value)}pt");
 
             // Bullet
             var bulletChar = pProps?.GetFirstChild<Drawing.CharacterBullet>()?.Char?.Value;

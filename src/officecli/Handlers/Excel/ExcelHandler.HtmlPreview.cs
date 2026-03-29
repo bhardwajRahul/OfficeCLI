@@ -110,15 +110,15 @@ public partial class ExcelHandler
         var (frozenRows, frozenCols) = GetFrozenPanes(ws);
 
         // Compute cumulative left offsets for frozen columns (for sticky positioning)
-        // Index 0 = row header width (40px), index 1 = col 1 left offset, etc.
+        // Index 0 = row header width (30pt), index 1 = col 1 left offset, etc.
         var frozenLeftOffsets = new Dictionary<int, double>();
         if (frozenCols > 0)
         {
-            double cumLeft = 40; // row header width
+            double cumLeft = 30; // row header width in pt
             for (int fc = 1; fc <= frozenCols; fc++)
             {
                 frozenLeftOffsets[fc] = cumLeft;
-                cumLeft += colWidths.TryGetValue(fc, out var w) ? w : 64.0;
+                cumLeft += colWidths.TryGetValue(fc, out var w) ? w : 48.0;
             }
         }
 
@@ -202,11 +202,11 @@ public partial class ExcelHandler
         sb.Append("<colgroup><col class=\"row-header-col\">");
         for (int c = 1; c <= maxCol; c++)
         {
-            var width = colWidths.TryGetValue(c, out var w) ? w : 64.0; // default ~8.43 chars ≈ 64px
+            var width = colWidths.TryGetValue(c, out var w) ? w : 48.0; // default ~8.43 chars ≈ 48pt
             if (width <= 0)
                 sb.Append("<col style=\"width:0;visibility:collapse\">");
             else
-                sb.Append($"<col style=\"width:{width:0.#}px\">");
+                sb.Append($"<col style=\"width:{width:0.##}pt\">");
         }
         sb.AppendLine("</colgroup>");
 
@@ -222,15 +222,15 @@ public partial class ExcelHandler
             string stickyStyle;
             if (frozenRows > 0 && isFrozenColHeader)
             {
-                var leftPx = frozenLeftOffsets.TryGetValue(c, out var lf) ? lf : 0;
-                stickyStyle = $" style=\"position:sticky;top:0;left:{leftPx:0.#}px;z-index:4\"";
+                var leftPt = frozenLeftOffsets.TryGetValue(c, out var lf) ? lf : 0;
+                stickyStyle = $" style=\"position:sticky;top:0;left:{leftPt:0.##}pt;z-index:4\"";
             }
             else if (frozenRows > 0)
                 stickyStyle = " style=\"position:sticky;top:0;z-index:3\"";
             else if (isFrozenColHeader)
             {
-                var leftPx = frozenLeftOffsets.TryGetValue(c, out var lf2) ? lf2 : 0;
-                stickyStyle = $" style=\"position:sticky;left:{leftPx:0.#}px;z-index:3\"";
+                var leftPt = frozenLeftOffsets.TryGetValue(c, out var lf2) ? lf2 : 0;
+                stickyStyle = $" style=\"position:sticky;left:{leftPt:0.##}pt;z-index:3\"";
             }
             else
                 stickyStyle = "";
@@ -243,7 +243,7 @@ public partial class ExcelHandler
         for (int r = 1; r <= maxRow; r++)
         {
             if (hiddenRows.Contains(r)) { sb.AppendLine("<tr style=\"display:none\"></tr>"); continue; }
-            var rowH = rowHeights.TryGetValue(r, out var rh) ? $" style=\"height:{rh * 1.33:0.#}px\"" : "";
+            var rowH = rowHeights.TryGetValue(r, out var rh) ? $" style=\"height:{rh:0.##}pt\"" : "";
             sb.Append($"<tr{rowH}>");
 
             // Row header
@@ -347,9 +347,9 @@ public partial class ExcelHandler
             var min = (int)(col.Min?.Value ?? 1u);
             var max = (int)(col.Max?.Value ?? (uint)min);
             // Hidden columns get width 0
-            var widthPx = col.Hidden?.Value == true ? 0 : (col.Width.Value == 0 ? 0 : col.Width.Value * 7.5 + 5);
+            var widthPt = col.Hidden?.Value == true ? 0 : (col.Width.Value == 0 ? 0 : col.Width.Value * 5.625 + 3.75);
             for (int c = min; c <= max; c++)
-                result[c] = widthPx;
+                result[c] = widthPt;
         }
 
         return result;
@@ -385,11 +385,11 @@ public partial class ExcelHandler
         // z-index layering: corner-cell=4, col-header=3, frozen-row+col=2, frozen-col=1
         var frozenLeft = frozenLeftOffsets?.TryGetValue(col, out var fl) == true ? fl : 0;
         if (isFrozenRow && isFrozenCol)
-            styles.Add($"position:sticky;top:0;left:{frozenLeft:0.#}px;z-index:2");
+            styles.Add($"position:sticky;top:0;left:{frozenLeft:0.##}pt;z-index:2");
         else if (isFrozenRow)
             styles.Add("position:sticky;top:0;z-index:1");
         else if (isFrozenCol)
-            styles.Add($"position:sticky;left:{frozenLeft:0.#}px;z-index:1");
+            styles.Add($"position:sticky;left:{frozenLeft:0.##}pt;z-index:1");
 
         if (cell == null || stylesheet == null)
             return styles.Count > 0 ? $" style=\"{string.Join(";", styles)}\"" : "";
@@ -578,7 +578,7 @@ public partial class ExcelHandler
         }
 
         if (alignment.Indent?.HasValue == true && alignment.Indent.Value > 0)
-            styles.Add($"padding-left:{alignment.Indent.Value * 8}px");
+            styles.Add($"padding-left:{alignment.Indent.Value * 6}pt");
 
         // Reading order: 1=LTR, 2=RTL (for mixed-direction content)
         if (alignment.ReadingOrder?.HasValue == true)
@@ -1010,7 +1010,7 @@ public partial class ExcelHandler
             font-family: 'Calibri', 'Segoe UI', sans-serif;
             table-layout: fixed;
         }
-        .row-header-col { width: 40px; }
+        .row-header-col { width: 30pt; }
         th {
             background: #f8f8f8;
             border: 1px solid #e0e0e0;

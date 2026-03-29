@@ -95,8 +95,8 @@ public partial class WordHandler
                 var w = col.Width?.Value;
                 if (w != null)
                 {
-                    var px = (int)(double.Parse(w, System.Globalization.CultureInfo.InvariantCulture) / 1440.0 * 96); // twips to px
-                    sb.Append($"<col style=\"width:{px}px\">");
+                    var pt = double.Parse(w, System.Globalization.CultureInfo.InvariantCulture) / 20.0; // twips to pt
+                    sb.Append($"<col style=\"width:{pt:0.##}pt\">");
                 }
                 else
                 {

@@ -37,10 +37,10 @@ public partial class PowerPointHandler
         var ext = pxfrm?.GetFirstChild<Drawing.Extents>();
         if (off == null || ext == null) return;
 
-        var x = EmuToCm(off.X?.Value ?? 0);
-        var y = EmuToCm(off.Y?.Value ?? 0);
-        var w = EmuToCm(ext.Cx?.Value ?? 0);
-        var h = EmuToCm(ext.Cy?.Value ?? 0);
+        var x = Units.EmuToPt(off.X?.Value ?? 0);
+        var y = Units.EmuToPt(off.Y?.Value ?? 0);
+        var w = Units.EmuToPt(ext.Cx?.Value ?? 0);
+        var h = Units.EmuToPt(ext.Cy?.Value ?? 0);
 
         // Read chart data — find c:chart element with r:id
         var chartEl = gf.Descendants().FirstOrDefault(e => e.LocalName == "chart" && e.NamespaceUri.Contains("chart"));
@@ -95,7 +95,7 @@ public partial class PowerPointHandler
         var chartTitle = chart?.GetFirstChild<DocumentFormat.OpenXml.Drawing.Charts.Title>();
         var titleText = chartTitle?.Descendants<Drawing.Text>().FirstOrDefault()?.Text ?? "";
         var titleFontSize = chartTitle?.Descendants<Drawing.RunProperties>().FirstOrDefault()?.FontSize;
-        var titleSizeCss = titleFontSize?.HasValue == true ? $"{titleFontSize.Value / 100.0:0.##}pt" : "11px";
+        var titleSizeCss = titleFontSize?.HasValue == true ? $"{titleFontSize.Value / 100.0:0.##}pt" : "8pt";
 
         // Check if dataLabels are enabled
         var dataLabels = plotArea.Descendants<DocumentFormat.OpenXml.Drawing.Charts.DataLabels>().FirstOrDefault();
@@ -147,7 +147,7 @@ public partial class PowerPointHandler
 
         // Container with optional chart background
         var bgStyle = chartFillColor != null ? $"background:#{chartFillColor};" : "background:transparent;";
-        sb.AppendLine($"    <div class=\"shape\" style=\"left:{x}cm;top:{y}cm;width:{w}cm;height:{h}cm;{bgStyle}display:flex;flex-direction:column;overflow:hidden\">");
+        sb.AppendLine($"    <div class=\"shape\" style=\"left:{x}pt;top:{y}pt;width:{w}pt;height:{h}pt;{bgStyle}display:flex;flex-direction:column;overflow:hidden\">");
 
         // Title
         if (!string.IsNullOrEmpty(titleText))
@@ -291,7 +291,7 @@ public partial class PowerPointHandler
 
         // Legend — render when the OOXML chart contains a <c:legend> element
         var legendFontSize = legendEl?.Descendants<Drawing.RunProperties>().FirstOrDefault()?.FontSize;
-        var legendSizeCss = legendFontSize?.HasValue == true ? $"{legendFontSize.Value / 100.0:0.##}pt" : "11px";
+        var legendSizeCss = legendFontSize?.HasValue == true ? $"{legendFontSize.Value / 100.0:0.##}pt" : "8pt";
         if (hasLegend)
         {
             sb.Append($"      <div class=\"chart-legend\" style=\"display:flex;flex-shrink:0;justify-content:center;gap:16px;padding:4px 0;font-size:{legendSizeCss};color:{chartLabelColor}\">");

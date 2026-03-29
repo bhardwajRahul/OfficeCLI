@@ -52,10 +52,10 @@ public partial class PowerPointHandler
 
         var styles = new List<string>
         {
-            $"left:{EmuToCm(x)}cm",
-            $"top:{EmuToCm(y)}cm",
-            $"width:{EmuToCm(cx)}cm",
-            $"height:{EmuToCm(cy)}cm"
+            $"left:{Units.EmuToPt(x)}pt",
+            $"top:{Units.EmuToPt(y)}pt",
+            $"width:{Units.EmuToPt(cx)}pt",
+            $"height:{Units.EmuToPt(cy)}pt"
         };
 
         // Fill
@@ -216,7 +216,7 @@ public partial class PowerPointHandler
             }
         }
 
-        styles.Add($"padding:{EmuToCm(tIns)}cm {EmuToCm(rIns)}cm {EmuToCm(bIns)}cm {EmuToCm(lIns)}cm");
+        styles.Add($"padding:{Units.EmuToPt(tIns)}pt {Units.EmuToPt(rIns)}pt {Units.EmuToPt(bIns)}pt {Units.EmuToPt(lIns)}pt");
 
         // Vertical alignment class
         var valign = "top";
@@ -634,10 +634,10 @@ public partial class PowerPointHandler
 
         var styles = new List<string>
         {
-            $"left:{EmuToCm(x)}cm",
-            $"top:{EmuToCm(y)}cm",
-            $"width:{EmuToCm(cx)}cm",
-            $"height:{EmuToCm(cy)}cm"
+            $"left:{Units.EmuToPt(x)}pt",
+            $"top:{Units.EmuToPt(y)}pt",
+            $"width:{Units.EmuToPt(cx)}pt",
+            $"height:{Units.EmuToPt(cy)}pt"
         };
 
         // Rotation
@@ -752,8 +752,8 @@ public partial class PowerPointHandler
         var minDimEmu = (long)(lineWidth * 12700 + 12700); // lineWidth + 1pt padding
         var renderCx = Math.Max(cx, cx == 0 ? minDimEmu : 1);
         var renderCy = Math.Max(cy, cy == 0 ? minDimEmu : 1);
-        var widthCm = EmuToCm(renderCx);
-        var heightCm = EmuToCm(renderCy);
+        var widthPt = Units.EmuToPt(renderCx);
+        var heightPt = Units.EmuToPt(renderCy);
 
         // Adjust y position upward by half the added height for zero-height lines
         var renderY = cy == 0 ? y - minDimEmu / 2 : y;
@@ -834,7 +834,7 @@ public partial class PowerPointHandler
             markerDefs = defs.ToString();
         }
 
-        sb.AppendLine($"    <div class=\"connector\" style=\"left:{EmuToCm(renderX)}cm;top:{EmuToCm(renderY)}cm;width:{widthCm}cm;height:{heightCm}cm\">");
+        sb.AppendLine($"    <div class=\"connector\" style=\"left:{Units.EmuToPt(renderX)}pt;top:{Units.EmuToPt(renderY)}pt;width:{widthPt}pt;height:{heightPt}pt\">");
         sb.AppendLine($"      <svg width=\"100%\" height=\"100%\" preserveAspectRatio=\"none\" style=\"overflow:visible\">");
         if (!string.IsNullOrEmpty(markerDefs))
             sb.AppendLine($"        {markerDefs}");
@@ -863,7 +863,7 @@ public partial class PowerPointHandler
         var offX = childOff?.X?.Value ?? 0;
         var offY = childOff?.Y?.Value ?? 0;
 
-        sb.AppendLine($"    <div class=\"group\" style=\"left:{EmuToCm(x)}cm;top:{EmuToCm(y)}cm;width:{EmuToCm(cx)}cm;height:{EmuToCm(cy)}cm\">");
+        sb.AppendLine($"    <div class=\"group\" style=\"left:{Units.EmuToPt(x)}pt;top:{Units.EmuToPt(y)}pt;width:{Units.EmuToPt(cx)}pt;height:{Units.EmuToPt(cy)}pt\">");
 
         foreach (var child in grp.ChildElements)
         {
@@ -947,7 +947,7 @@ public partial class PowerPointHandler
         var offX = childOff?.X?.Value ?? 0;
         var offY = childOff?.Y?.Value ?? 0;
 
-        sb.AppendLine($"    <div class=\"group\" style=\"left:{EmuToCm(x)}cm;top:{EmuToCm(y)}cm;width:{EmuToCm(cx)}cm;height:{EmuToCm(cy)}cm\">");
+        sb.AppendLine($"    <div class=\"group\" style=\"left:{Units.EmuToPt(x)}pt;top:{Units.EmuToPt(y)}pt;width:{Units.EmuToPt(cx)}pt;height:{Units.EmuToPt(cy)}pt\">");
 
         foreach (var child in grp.ChildElements)
         {
@@ -1021,19 +1021,19 @@ public partial class PowerPointHandler
         long.TryParse(ext.GetAttribute("cy", "").Value, out var cy);
         if (cx == 0 || cy == 0) return;
 
-        var leftCm = x / 360000.0;
-        var topCm = y / 360000.0;
-        var widthCm = cx / 360000.0;
-        var heightCm = cy / 360000.0;
+        var leftPt = Units.EmuToPt(x);
+        var topPt = Units.EmuToPt(y);
+        var widthPt2 = Units.EmuToPt(cx);
+        var heightPt2 = Units.EmuToPt(cy);
 
         if (isModel3D)
         {
-            RenderModel3D(sb, acElement, slidePart, leftCm, topCm, widthCm, heightCm);
+            RenderModel3D(sb, acElement, slidePart, leftPt, topPt, widthPt2, heightPt2);
         }
         else
         {
             // Zoom: render fallback image
-            RenderZoomFallback(sb, acElement, slidePart, leftCm, topCm, widthCm, heightCm);
+            RenderZoomFallback(sb, acElement, slidePart, leftPt, topPt, widthPt2, heightPt2);
         }
     }
 
@@ -1046,7 +1046,7 @@ public partial class PowerPointHandler
     /// Same GLB files across slides are deduplicated — embedded once, referenced by variable.
     /// </summary>
     private static void RenderModel3D(StringBuilder sb, OpenXmlElement acElement,
-        SlidePart slidePart, double leftCm, double topCm, double widthCm, double heightCm)
+        SlidePart slidePart, double leftPt, double topPt, double widthPt, double heightPt)
     {
         // Find the model3d element and get the GLB relationship
         var model3d = acElement.Descendants().FirstOrDefault(d => d.LocalName == "model3d");
@@ -1116,8 +1116,8 @@ public partial class PowerPointHandler
 
         var containerId = $"m3d_wrap_{canvasId}";
         sb.AppendLine($"    <div id=\"{containerId}\" style=\"position:absolute;" +
-            $"left:{leftCm:F3}cm;top:{topCm:F3}cm;" +
-            $"width:{widthCm:F3}cm;height:{heightCm:F3}cm;" +
+            $"left:{leftPt:0.##}pt;top:{topPt:0.##}pt;" +
+            $"width:{widthPt:0.##}pt;height:{heightPt:0.##}pt;" +
             $"overflow:hidden;\">");
         sb.AppendLine($"      <canvas id=\"{canvasId}\" style=\"width:100%;height:100%;\"></canvas>");
         if (fallbackImgSrc != null)
@@ -1132,8 +1132,8 @@ public partial class PowerPointHandler
       if (!canvas) return;
       const container = canvas.parentElement;
       try {{
-        const designW = {widthCm:F3} * 96 / 2.54;
-        const designH = {heightCm:F3} * 96 / 2.54;
+        const designW = {widthPt:0.##} * 96 / 72;
+        const designH = {heightPt:0.##} * 96 / 72;
         canvas.width = designW * 2; canvas.height = designH * 2;
         canvas.style.width = '100%'; canvas.style.height = '100%';
 
@@ -1205,7 +1205,7 @@ public partial class PowerPointHandler
     /// Render a zoom element using its fallback image.
     /// </summary>
     private static void RenderZoomFallback(StringBuilder sb, OpenXmlElement acElement,
-        SlidePart slidePart, double leftCm, double topCm, double widthCm, double heightCm)
+        SlidePart slidePart, double leftPt, double topPt, double widthPt, double heightPt)
     {
         var fallback = acElement.ChildElements.FirstOrDefault(e => e.LocalName == "Fallback");
         var fbBlip = fallback?.Descendants().FirstOrDefault(d => d.LocalName == "blip");
@@ -1231,8 +1231,8 @@ public partial class PowerPointHandler
         }
 
         sb.AppendLine($"    <div style=\"position:absolute;" +
-            $"left:{leftCm:F3}cm;top:{topCm:F3}cm;" +
-            $"width:{widthCm:F3}cm;height:{heightCm:F3}cm;" +
+            $"left:{leftPt:0.##}pt;top:{topPt:0.##}pt;" +
+            $"width:{widthPt:0.##}pt;height:{heightPt:0.##}pt;" +
             $"border:2px dashed rgba(255,193,7,0.6);border-radius:8px;" +
             $"overflow:hidden;\">");
         if (imgSrc != null)

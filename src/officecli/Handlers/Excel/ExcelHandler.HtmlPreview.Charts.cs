@@ -99,13 +99,13 @@ public partial class ExcelHandler
         }
 
         // 4. Estimate chart dimensions from TwoCellAnchor
-        var (widthPx, heightPx) = EstimateChartSize(gf);
+        var (widthPt, heightPt) = EstimateChartSize(gf);
 
         // 5. Read chart metadata
         var chartTitle = chart?.GetFirstChild<C.Title>();
         var titleText = chartTitle?.Descendants<Drawing.Text>().FirstOrDefault()?.Text ?? "";
         var titleFontSize = chartTitle?.Descendants<Drawing.RunProperties>().FirstOrDefault()?.FontSize;
-        var titleSizeCss = titleFontSize?.HasValue == true ? $"{titleFontSize.Value / 100.0:0.##}pt" : "13px";
+        var titleSizeCss = titleFontSize?.HasValue == true ? $"{titleFontSize.Value / 100.0:0.##}pt" : "10pt";
 
         var dataLabels = plotArea.Descendants<C.DataLabels>().FirstOrDefault();
         var showValues = dataLabels?.GetFirstChild<C.ShowValue>()?.Val?.Value == true
@@ -164,8 +164,8 @@ public partial class ExcelHandler
         };
 
         // 7. Build SVG
-        var svgW = Math.Max(widthPx, 300);
-        var svgH = Math.Max(heightPx, 200);
+        var svgW = Math.Max(widthPt, 225);
+        var svgH = Math.Max(heightPt, 150);
         var titleH = string.IsNullOrEmpty(titleText) ? 0 : 30;
         var legendH = hasLegend ? 30 : 0;
         var chartSvgH = svgH - titleH - legendH;
@@ -176,7 +176,7 @@ public partial class ExcelHandler
         if (plotW < 50 || plotH < 50) return;
 
         var bgStyle = chartFillColor != null ? $"background:#{chartFillColor};" : "";
-        sb.AppendLine($"<div class=\"chart-container\" style=\"max-width:{svgW}px;{bgStyle}\">");
+        sb.AppendLine($"<div class=\"chart-container\" style=\"max-width:{svgW}pt;{bgStyle}\">");
 
         // Title
         if (!string.IsNullOrEmpty(titleText))
@@ -248,7 +248,7 @@ public partial class ExcelHandler
         if (hasLegend)
         {
             var legendFontSize = legendEl?.Descendants<Drawing.RunProperties>().FirstOrDefault()?.FontSize;
-            var legendSizeCss = legendFontSize?.HasValue == true ? $"{legendFontSize.Value / 100.0:0.##}pt" : "11px";
+            var legendSizeCss = legendFontSize?.HasValue == true ? $"{legendFontSize.Value / 100.0:0.##}pt" : "8pt";
             sb.Append($"  <div style=\"display:flex;justify-content:center;gap:16px;padding:6px 0;font-size:{legendSizeCss};color:#555\">");
             if (isPieOrDoughnut && categories.Length > 0)
             {
@@ -272,14 +272,14 @@ public partial class ExcelHandler
     /// <summary>
     /// Estimate chart pixel size from the TwoCellAnchor parent.
     /// </summary>
-    private static (int widthPx, int heightPx) EstimateChartSize(XDR.GraphicFrame gf)
+    private static (int widthPt, int heightPt) EstimateChartSize(XDR.GraphicFrame gf)
     {
         var anchor = gf.Parent as XDR.TwoCellAnchor;
-        if (anchor == null) return (600, 350);
+        if (anchor == null) return (450, 263);
 
         var from = anchor.FromMarker;
         var to = anchor.ToMarker;
-        if (from == null || to == null) return (600, 350);
+        if (from == null || to == null) return (450, 263);
 
         var fromCol = int.TryParse(from.ColumnId?.Text, out var fc) ? fc : 0;
         var toCol = int.TryParse(to.ColumnId?.Text, out var tc) ? tc : 0;
@@ -291,10 +291,10 @@ public partial class ExcelHandler
         var fromRowOff = long.TryParse(from.RowOffset?.Text, out var fro) ? fro : 0;
         var toRowOff = long.TryParse(to.RowOffset?.Text, out var tro) ? tro : 0;
 
-        // Default column width ~64px, default row height ~20px
-        double totalWidth = (toCol - fromCol) * 64.0 + (toColOff - fromColOff) / 9525.0;
-        double totalHeight = (toRow - fromRow) * 20.0 + (toRowOff - fromRowOff) / 9525.0;
+        // Default column width ~48pt, default row height ~15pt; offsets in EMU (1pt = 12700 EMU)
+        double totalWidth = (toCol - fromCol) * 48.0 + (toColOff - fromColOff) / 12700.0;
+        double totalHeight = (toRow - fromRow) * 15.0 + (toRowOff - fromRowOff) / 12700.0;
 
-        return ((int)Math.Max(totalWidth, 300), (int)Math.Max(totalHeight, 200));
+        return ((int)Math.Max(totalWidth, 225), (int)Math.Max(totalHeight, 150));
     }
 }

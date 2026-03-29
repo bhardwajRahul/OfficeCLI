@@ -35,7 +35,7 @@ public partial class PowerPointHandler
         bool hasFirstRow = tblPr?.FirstRow?.Value == true;
         bool hasBandRow = tblPr?.BandRow?.Value == true;
 
-        sb.AppendLine($"    <div class=\"table-container\" style=\"left:{EmuToCm(x)}cm;top:{EmuToCm(y)}cm;width:{EmuToCm(cx)}cm;height:{EmuToCm(cy)}cm\">");
+        sb.AppendLine($"    <div class=\"table-container\" style=\"left:{Units.EmuToPt(x)}pt;top:{Units.EmuToPt(y)}pt;width:{Units.EmuToPt(cx)}pt;height:{Units.EmuToPt(cy)}pt\">");
         sb.AppendLine("      <table class=\"slide-table\">");
 
         // Column widths
@@ -147,11 +147,11 @@ public partial class PowerPointHandler
                 var marB = tcPr?.BottomMargin?.Value;
                 if (marL.HasValue || marR.HasValue || marT.HasValue || marB.HasValue)
                 {
-                    var pT = EmuToCm(marT ?? 45720);
-                    var pR = EmuToCm(marR ?? 91440);
-                    var pB = EmuToCm(marB ?? 45720);
-                    var pL = EmuToCm(marL ?? 91440);
-                    cellStyles.Add($"padding:{pT}cm {pR}cm {pB}cm {pL}cm");
+                    var pT = Units.EmuToPt(marT ?? 45720);
+                    var pR = Units.EmuToPt(marR ?? 91440);
+                    var pB = Units.EmuToPt(marB ?? 45720);
+                    var pL = Units.EmuToPt(marL ?? 91440);
+                    cellStyles.Add($"padding:{pT}pt {pR}pt {pB}pt {pL}pt");
                 }
 
                 // Paragraph alignment
