@@ -53,6 +53,13 @@ public partial class WordHandler
             if (leftDist > 0) tableStyles.Add($"margin-left:{leftDist / 20.0:0.#}pt");
         }
 
+        // Table horizontal alignment on page (jc = center/right)
+        var tblJc = tblPr?.TableJustification?.Val?.InnerText;
+        if (tblJc == "center")
+            tableStyles.Add("margin-left:auto;margin-right:auto");
+        else if (tblJc == "right")
+            tableStyles.Add("margin-left:auto;margin-right:0");
+
         // Apply base table style rPr (font-size, color, alignment) to the <table>
         if (styleId != null)
         {
