@@ -169,11 +169,22 @@ public partial class WordHandler
             if (anchor != null)
             {
                 // Check wrap type for float direction
-                var wrapLeft = anchor.Elements().Any(e => e.LocalName == "wrapSquare" || e.LocalName == "wrapTight");
-                if (wrapLeft)
+                var wrapFloat = anchor.Elements().Any(e => e.LocalName == "wrapSquare" || e.LocalName == "wrapTight");
+                if (wrapFloat)
                 {
-                    var hPosFrom = anchor.GetFirstChild<DW.HorizontalPosition>()?.RelativeFrom?.Value;
-                    floatCss = hPosFrom == DW.HorizontalRelativePositionValues.RightMargin
+                    var hPos = anchor.GetFirstChild<DW.HorizontalPosition>();
+                    var hAlign = hPos?.Descendants().FirstOrDefault(e => e.LocalName == "align")?.InnerText;
+                    var hPosFrom = hPos?.RelativeFrom?.Value;
+                    var isRight = hAlign == "right"
+                        || hPosFrom == DW.HorizontalRelativePositionValues.RightMargin;
+                    // Also check posOffset — if offset > half page width, float right
+                    if (!isRight && hPos != null)
+                    {
+                        var offsetEl = hPos.Descendants().FirstOrDefault(e => e.LocalName == "posOffset");
+                        if (offsetEl != null && long.TryParse(offsetEl.InnerText, out var offsetEmu))
+                            isRight = offsetEmu > 3000000; // ~half of typical page width in EMU
+                    }
+                    floatCss = isRight
                         ? "float:right;margin:0 0 8px 8px"
                         : "float:left;margin:0 8px 8px 0";
                 }
