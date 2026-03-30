@@ -172,8 +172,8 @@ public partial class WordHandler
         sb.AppendLine("function _wordInit(){");
         sb.AppendLine("  if(typeof renderMathInElement!=='undefined'){");
         sb.AppendLine("    renderMathInElement(document.body,{delimiters:[");
-        sb.AppendLine("      {left:'$$',right:'$$',display:true},");
-        sb.AppendLine("      {left:'$',right:'$',display:false}");
+        sb.AppendLine("      {left:'\\\\[',right:'\\\\]',display:true},");
+        sb.AppendLine("      {left:'\\\\(',right:'\\\\)',display:false}");
         sb.AppendLine("    ],throwOnError:false});");
         sb.AppendLine("  }");
         // CJK punctuation compression (~25% per JIS X4051): negative margin on punctuation
@@ -600,7 +600,7 @@ public partial class WordHandler
                 {
                     CloseAllLists(sb, listStack, ref currentListType, ref pendingLiClose);
                     var latex = FormulaParser.ToLatex(oMathPara);
-                    sb.AppendLine($"<div class=\"equation\">$${HtmlEncode(latex)}$$</div>");
+                    sb.AppendLine($"<div class=\"equation\">\\[{HtmlEncode(latex)}\\]</div>");
                     continue;
                 }
 
@@ -828,7 +828,7 @@ public partial class WordHandler
                     if (mathElements.Count > 0 && runs.Count == 0 && string.IsNullOrWhiteSpace(text))
                     {
                         var latex = string.Concat(mathElements.Select(FormulaParser.ToLatex));
-                        sb.AppendLine($"<div class=\"equation\">$${HtmlEncode(latex)}$$</div>");
+                        sb.AppendLine($"<div class=\"equation\">\\[{HtmlEncode(latex)}\\]</div>");
                         continue;
                     }
 
@@ -849,7 +849,7 @@ public partial class WordHandler
             {
                 CloseAllLists(sb, listStack, ref currentListType, ref pendingLiClose);
                 var latex = FormulaParser.ToLatex(element);
-                sb.AppendLine($"<div class=\"equation\">$${HtmlEncode(latex)}$$</div>");
+                sb.AppendLine($"<div class=\"equation\">\\[{HtmlEncode(latex)}\\]</div>");
             }
             else if (element is Table table)
             {
