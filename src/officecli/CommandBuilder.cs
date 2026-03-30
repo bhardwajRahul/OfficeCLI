@@ -495,7 +495,6 @@ static class CommandBuilder
             var path = result.GetValue(setPathArg)!;
             var props = result.GetValue(propsOpt);
             var force = result.GetValue(forceOption);
-            bool hadWarnings = false;
 
             // Check document protection for .docx files
             if (!force && file.Extension.Equals(".docx", StringComparison.OrdinalIgnoreCase))
@@ -508,7 +507,6 @@ static class CommandBuilder
             var unmatchedKvWarnings = DetectUnmatchedKeyValues(result);
             if (unmatchedKvWarnings.Count > 0)
             {
-                hadWarnings = true;
                 if (json)
                 {
                     var kvWarnings = unmatchedKvWarnings.Select(kv => new OfficeCli.Core.CliWarning
@@ -568,7 +566,6 @@ static class CommandBuilder
                         if (retryUnsupported.Count == 0)
                         {
                             autoCorrected.Add((rawKey, suggestion, val));
-                            hadWarnings = true;
                             continue;
                         }
                     }
@@ -628,7 +625,6 @@ static class CommandBuilder
                         Code = "position_overlap",
                         Suggestion = "Use different x/y values to avoid overlap"
                     });
-                    hadWarnings = true;
                 }
                 var outputMsg = setSpatialLine != null ? $"{message}\n  {setSpatialLine}" : message;
                 bool allFailed = applied.Count == 0 && (stillUnsupported.Count > 0 || unsupported.Count > 0);
@@ -649,7 +645,7 @@ static class CommandBuilder
             }
             NotifyWatch(handler, file.FullName, path);
 
-            if (hadWarnings || stillUnsupported.Count > 0) return 2;
+            if (stillUnsupported.Count > 0) return 2;
             return 0;
         }, json); });
 
@@ -780,7 +776,6 @@ static class CommandBuilder
                         Code = "position_overlap",
                         Suggestion = "Use --prop x=... y=... to set distinct positions"
                     });
-                    hadWarnings = true;
                 }
                 if (json)
                 {
