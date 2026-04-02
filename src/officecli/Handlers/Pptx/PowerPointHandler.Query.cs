@@ -828,7 +828,8 @@ public partial class PowerPointHandler
                 or "connector" or "connection"
                 or "group" or "zoom"
                 or "slidemaster" or "slidelayout"
-                or "media" or "image";
+                or "media" or "image"
+                or "tc" or "cell" or "tr" or "row";
         if (!isKnownType)
         {
             var genericParsed = GenericXmlQuery.ParseSelector(selector);
@@ -1033,6 +1034,59 @@ public partial class PowerPointHandler
                             continue;
                     }
                     results.Add(tblNode);
+                }
+            }
+
+            // Table cell (tc/cell) and row (tr/row) query — returns friendly paths
+            if (parsed.ElementType is "tc" or "cell" or "tr" or "row")
+            {
+                int tblIdx2 = 0;
+                foreach (var gf in shapeTree.Elements<GraphicFrame>())
+                {
+                    var tbl = gf.Descendants<Drawing.Table>().FirstOrDefault();
+                    if (tbl == null) continue;
+                    tblIdx2++;
+                    int rIdx = 0;
+                    foreach (var row in tbl.Elements<Drawing.TableRow>())
+                    {
+                        rIdx++;
+                        if (parsed.ElementType is "tr" or "row")
+                        {
+                            var rowText = string.Join(" | ", row.Elements<Drawing.TableCell>().Select(c => c.TextBody?.InnerText ?? ""));
+                            var rowNode = new DocumentNode
+                            {
+                                Path = $"/slide[{slideNum}]/table[{tblIdx2}]/tr[{rIdx}]",
+                                Type = "tr",
+                                Text = rowText,
+                                ChildCount = row.Elements<Drawing.TableCell>().Count()
+                            };
+                            if (parsed.TextContains == null || rowText.Contains(parsed.TextContains, StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (MatchesGenericAttributes(rowNode, parsed.Attributes))
+                                    results.Add(rowNode);
+                            }
+                        }
+                        else
+                        {
+                            int cIdx = 0;
+                            foreach (var cell in row.Elements<Drawing.TableCell>())
+                            {
+                                cIdx++;
+                                var cellText = cell.TextBody?.InnerText ?? "";
+                                var cellNode = new DocumentNode
+                                {
+                                    Path = $"/slide[{slideNum}]/table[{tblIdx2}]/tr[{rIdx}]/tc[{cIdx}]",
+                                    Type = "tc",
+                                    Text = cellText
+                                };
+                                if (parsed.TextContains == null || cellText.Contains(parsed.TextContains, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (MatchesGenericAttributes(cellNode, parsed.Attributes))
+                                        results.Add(cellNode);
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
