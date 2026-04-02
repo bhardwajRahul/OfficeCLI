@@ -1394,11 +1394,12 @@ public partial class PowerPointHandler
     /// </summary>
     private static string? ReadTransitionDirection(OpenXmlElement transElem)
     {
-        // Slide direction transitions: always include direction (users commonly specify these)
+        // Slide direction transitions: include direction only when non-default
+        // WipeTransition default is Left; PushTransition default is Left
         if (transElem is WipeTransition wipe && wipe.Direction?.HasValue == true)
-            return MapSlideDirection(wipe.Direction.Value);
+            return wipe.Direction.Value == TransitionSlideDirectionValues.Left ? null : MapSlideDirection(wipe.Direction.Value);
         if (transElem is PushTransition push && push.Direction?.HasValue == true)
-            return MapSlideDirection(push.Direction.Value);
+            return push.Direction.Value == TransitionSlideDirectionValues.Left ? null : MapSlideDirection(push.Direction.Value);
         if (transElem is CoverTransition cover && cover.Direction != null)
             return ExpandDirectionAbbreviation(cover.Direction.Value?.ToLowerInvariant());
         if (transElem is PullTransition pull && pull.Direction != null)
