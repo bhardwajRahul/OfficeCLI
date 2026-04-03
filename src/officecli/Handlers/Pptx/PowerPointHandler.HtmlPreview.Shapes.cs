@@ -1125,8 +1125,16 @@ public partial class PowerPointHandler
         sb.AppendLine("    </div>");
 
         sb.AppendLine($@"    <script type=""module"">
-    import * as THREE from 'three';
-    import {{ GLTFLoader }} from 'three/addons/loaders/GLTFLoader.js';
+    let THREE, GLTFLoader;
+    try {{
+      THREE = await import('three');
+      ({{ GLTFLoader }} = await import('three/addons/loaders/GLTFLoader.js'));
+    }} catch(e) {{
+      // Three.js unavailable (offline) — show fallback image
+      const c = document.getElementById('{canvasId}');
+      if (c) {{ c.style.display='none'; const fb=c.parentElement?.querySelector('.m3d-fallback'); if(fb) fb.style.display='block'; }}
+      throw e; // stop execution of this module
+    }}
     (function() {{
       const canvas = document.getElementById('{canvasId}');
       if (!canvas) return;
