@@ -891,6 +891,9 @@ public partial class ExcelHandler
     private static bool IsTruthy(string? value) =>
         ParseHelpers.IsTruthy(value);
 
+    private static bool IsValidBooleanString(string? value) =>
+        ParseHelpers.IsValidBooleanString(value);
+
     private static IconSetValues ParseIconSetValues(string name)
     {
         return name.ToLowerInvariant() switch

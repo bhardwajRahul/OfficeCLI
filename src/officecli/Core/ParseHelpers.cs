@@ -110,11 +110,29 @@ public static class ParseHelpers
     };
 
     /// <summary>
-    /// Accepts "true", "1", "yes", "on" (case-insensitive) as truthy.
-    /// Returns false for null or empty values.
+    /// Returns true if the value is a recognized boolean string and is truthy.
+    /// Returns false for null, empty, or recognized falsy values ("false", "0", "no", "off").
+    /// Throws <see cref="ArgumentException"/> for non-null values that are not recognized boolean strings.
     /// </summary>
-    public static bool IsTruthy(string? value) =>
-        value != null && value.ToLowerInvariant() is "true" or "1" or "yes" or "on";
+    public static bool IsTruthy(string? value)
+    {
+        if (value == null) return false;
+        return value.ToLowerInvariant() switch
+        {
+            "true" or "1" or "yes" or "on" => true,
+            "false" or "0" or "no" or "off" or "" => false,
+            _ => throw new ArgumentException(
+                $"Invalid boolean value: '{value}'. Expected true/false, yes/no, 1/0, or on/off.")
+        };
+    }
+
+    /// <summary>
+    /// Returns true if the value is a recognized boolean string (truthy or falsy).
+    /// Returns false for null, empty, or non-boolean values (no exception thrown).
+    /// </summary>
+    public static bool IsValidBooleanString(string? value) =>
+        value != null && value.ToLowerInvariant() is "true" or "1" or "yes" or "on"
+                                                  or "false" or "0" or "no" or "off";
 
     /// <summary>
     /// Parse a font size string, stripping optional "pt" suffix.

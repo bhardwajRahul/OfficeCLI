@@ -324,7 +324,7 @@ public class ExcelStyleManager
         bool strike = fontProps.TryGetValue("strike", out var sVal)
             ? IsTruthy(sVal) : baseFont.Strike != null;
         string? underline = fontProps.TryGetValue("underline", out var uVal)
-            ? (uVal.ToLowerInvariant() is "double" ? "double" : (IsTruthy(uVal) || uVal.ToLowerInvariant() == "single" ? "single" : null))
+            ? (uVal.ToLowerInvariant() is "double" ? "double" : (uVal.ToLowerInvariant() == "single" || (IsValidBooleanString(uVal) && IsTruthy(uVal)) ? "single" : null))
             : (baseFont.Underline != null ? (baseFont.Underline.Val?.InnerText == "double" ? "double" : "single") : null);
         // vertAlign: superscript / subscript / null (baseline)
         var baseVertAlign = baseFont.GetFirstChild<VerticalTextAlignment>();
@@ -837,6 +837,9 @@ public class ExcelStyleManager
 
     private static bool IsTruthy(string? value) =>
         ParseHelpers.IsTruthy(value);
+
+    private static bool IsValidBooleanString(string? value) =>
+        ParseHelpers.IsValidBooleanString(value);
 
     private static HorizontalAlignmentValues ParseHAlign(string value) =>
         value.ToLowerInvariant() switch

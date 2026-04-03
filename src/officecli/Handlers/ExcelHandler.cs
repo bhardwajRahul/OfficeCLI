@@ -14,6 +14,7 @@ public partial class ExcelHandler : IDocumentHandler
 {
     private readonly SpreadsheetDocument _doc;
     private readonly string _filePath;
+    private readonly HashSet<string> _initialSheetNames;
 
     public ExcelHandler(string filePath, bool editable)
     {
@@ -23,6 +24,12 @@ public partial class ExcelHandler : IDocumentHandler
             _doc = SpreadsheetDocument.Open(filePath, editable);
             // Force early validation: access WorkbookPart to catch corrupt packages now
             _ = _doc.WorkbookPart?.Workbook;
+            // Capture initial sheet names to detect duplicate additions
+            _initialSheetNames = new HashSet<string>(
+                GetWorkbook().GetFirstChild<Sheets>()?.Elements<Sheet>()
+                    .Select(s => s.Name?.Value ?? "")
+                    .Where(n => !string.IsNullOrEmpty(n)) ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
         }
         catch (DocumentFormat.OpenXml.Packaging.OpenXmlPackageException ex)
         {

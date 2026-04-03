@@ -16,6 +16,9 @@ public partial class PowerPointHandler
     private static bool IsTruthy(string? value) =>
         ParseHelpers.IsTruthy(value);
 
+    private static bool IsValidBooleanString(string? value) =>
+        ParseHelpers.IsValidBooleanString(value);
+
     /// <summary>
     /// Normalize cell[R,C] shorthand to tr[R]/tc[C] in paths.
     /// E.g. /slide[1]/table[1]/cell[2,3] → /slide[1]/table[1]/tr[2]/tc[3]

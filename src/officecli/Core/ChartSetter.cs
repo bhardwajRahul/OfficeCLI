@@ -894,7 +894,7 @@ internal static partial class ChartHelper
                     var scaling = valAx?.GetFirstChild<C.Scaling>();
                     if (scaling == null) { unsupported.Add(key); break; }
                     scaling.RemoveAllChildren<C.Orientation>();
-                    var orient = ParseHelpers.IsTruthy(value) || value.Equals("maxmin", StringComparison.OrdinalIgnoreCase)
+                    var orient = (ParseHelpers.IsValidBooleanString(value) && ParseHelpers.IsTruthy(value)) || value.Equals("maxmin", StringComparison.OrdinalIgnoreCase)
                         ? C.OrientationValues.MaxMin : C.OrientationValues.MinMax;
                     scaling.PrependChild(new C.Orientation { Val = orient });
                     break;
@@ -1371,7 +1371,7 @@ internal static partial class ChartHelper
                     var lc = plotArea2?.GetFirstChild<C.LineChart>();
                     if (lc == null) { unsupported.Add(key); break; }
                     lc.RemoveAllChildren<C.DropLines>();
-                    if (ParseHelpers.IsTruthy(value) || !value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    if ((ParseHelpers.IsValidBooleanString(value) && ParseHelpers.IsTruthy(value)) || !value.Equals("none", StringComparison.OrdinalIgnoreCase))
                     {
                         var dl = new C.DropLines();
                         if (!value.Equals("true", StringComparison.OrdinalIgnoreCase))
@@ -1387,7 +1387,7 @@ internal static partial class ChartHelper
                     var lc = plotArea2?.GetFirstChild<C.LineChart>();
                     if (lc == null) { unsupported.Add(key); break; }
                     lc.RemoveAllChildren<C.HighLowLines>();
-                    if (ParseHelpers.IsTruthy(value) || !value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    if ((ParseHelpers.IsValidBooleanString(value) && ParseHelpers.IsTruthy(value)) || !value.Equals("none", StringComparison.OrdinalIgnoreCase))
                     {
                         var hl = new C.HighLowLines();
                         if (!value.Equals("true", StringComparison.OrdinalIgnoreCase))

@@ -34,6 +34,15 @@ public partial class ExcelHandler
                     ?? GetWorkbook().AppendChild(new Sheets());
 
                 var name = properties.GetValueOrDefault("name", $"Sheet{sheets.Elements<Sheet>().Count() + 1}");
+                if (sheets.Elements<Sheet>().Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    if (_initialSheetNames.Contains(name))
+                    {
+                        // Sheet existed when the file was opened — treat as idempotent no-op
+                        return $"/{name}";
+                    }
+                    throw new ArgumentException($"A sheet named '{name}' already exists. Sheet names must be unique.");
+                }
                 var newWorksheetPart = workbookPart.AddNewPart<WorksheetPart>();
                 newWorksheetPart.Worksheet = new Worksheet(new SheetData());
                 newWorksheetPart.Worksheet.Save();
@@ -986,14 +995,14 @@ public partial class ExcelHandler
                     if (properties.TryGetValue("shadow", out var shpShadow) && !shpShadow.Equals("none", StringComparison.OrdinalIgnoreCase))
                     {
                         var normalizedShadow = shpShadow.Replace(':', '-');
-                        if (IsTruthy(normalizedShadow)) normalizedShadow = "000000";
+                        if (IsValidBooleanString(normalizedShadow) && IsTruthy(normalizedShadow)) normalizedShadow = "000000";
                         shpEffectList ??= new Drawing.EffectList();
                         shpEffectList.AppendChild(OfficeCli.Core.DrawingEffectsHelper.BuildOuterShadow(normalizedShadow, OfficeCli.Core.DrawingEffectsHelper.BuildRgbColor));
                     }
                     if (properties.TryGetValue("glow", out var shpGlow) && !shpGlow.Equals("none", StringComparison.OrdinalIgnoreCase))
                     {
                         var normalizedGlow = shpGlow.Replace(':', '-');
-                        if (IsTruthy(normalizedGlow)) normalizedGlow = "4472C4";
+                        if (IsValidBooleanString(normalizedGlow) && IsTruthy(normalizedGlow)) normalizedGlow = "4472C4";
                         shpEffectList ??= new Drawing.EffectList();
                         shpEffectList.AppendChild(OfficeCli.Core.DrawingEffectsHelper.BuildGlow(normalizedGlow, OfficeCli.Core.DrawingEffectsHelper.BuildRgbColor));
                     }
@@ -1049,14 +1058,14 @@ public partial class ExcelHandler
                         if (properties.TryGetValue("shadow", out var ts) && !ts.Equals("none", StringComparison.OrdinalIgnoreCase))
                         {
                             var normalizedTs = ts.Replace(':', '-');
-                            if (IsTruthy(normalizedTs)) normalizedTs = "000000";
+                            if (IsValidBooleanString(normalizedTs) && IsTruthy(normalizedTs)) normalizedTs = "000000";
                             txtEffects ??= new Drawing.EffectList();
                             txtEffects.AppendChild(OfficeCli.Core.DrawingEffectsHelper.BuildOuterShadow(normalizedTs, OfficeCli.Core.DrawingEffectsHelper.BuildRgbColor));
                         }
                         if (properties.TryGetValue("glow", out var tg) && !tg.Equals("none", StringComparison.OrdinalIgnoreCase))
                         {
                             var normalizedTg = tg.Replace(':', '-');
-                            if (IsTruthy(normalizedTg)) normalizedTg = "4472C4";
+                            if (IsValidBooleanString(normalizedTg) && IsTruthy(normalizedTg)) normalizedTg = "4472C4";
                             txtEffects ??= new Drawing.EffectList();
                             txtEffects.AppendChild(OfficeCli.Core.DrawingEffectsHelper.BuildGlow(normalizedTg, OfficeCli.Core.DrawingEffectsHelper.BuildRgbColor));
                         }
