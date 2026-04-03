@@ -693,6 +693,11 @@ public class ResidentServer : IDisposable
             _disposed = true;
             _cts.Cancel();
 
+            // Kick both pipe listeners out of WaitForConnectionAsync so RunAsync can exit.
+            // Without this, Dispose() after SIGKILL/crash leaves pipes blocked indefinitely.
+            KickPipe(_pipeName);
+            KickPipe(_pipeName + "-ping");
+
             // Run the entire shutdown sequence on a background thread.
             // A watchdog on the calling thread ensures the process always exits.
             var shutdownTask = Task.Run(() =>
@@ -717,6 +722,16 @@ public class ResidentServer : IDisposable
             _cts.Dispose();
             _idleCts.Dispose();
         }
+    }
+
+    private static void KickPipe(string pipeName)
+    {
+        try
+        {
+            using var kick = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
+            kick.Connect(500);
+        }
+        catch { }
     }
 }
 
