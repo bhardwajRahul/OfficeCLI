@@ -1297,6 +1297,63 @@ public partial class WordHandler
                     }
                     results.Add(node);
                 }
+                else if (isEquationSelector)
+                {
+                    // Scan inside table cells for equations
+                    var tblIdx = body.Elements<DocumentFormat.OpenXml.Wordprocessing.Table>()
+                        .TakeWhile(t => t != tbl).Count();
+                    int rowIdx = 0;
+                    foreach (var row in tbl.Elements<TableRow>())
+                    {
+                        rowIdx++;
+                        int cellIdx = 0;
+                        foreach (var cell in row.Elements<TableCell>())
+                        {
+                            cellIdx++;
+                            int cellParaIdx = 0;
+                            foreach (var cellPara in cell.Elements<Paragraph>())
+                            {
+                                cellParaIdx++;
+                                // Display equations inside table cell paragraphs
+                                var oMathParaInCell = cellPara.ChildElements.FirstOrDefault(e => e.LocalName == "oMathPara" || e is M.Paragraph);
+                                if (oMathParaInCell != null)
+                                {
+                                    mathParaIdx++;
+                                    var latex = FormulaParser.ToLatex(oMathParaInCell);
+                                    if (parsed.ContainsText == null || latex.Contains(parsed.ContainsText))
+                                    {
+                                        results.Add(new DocumentNode
+                                        {
+                                            Path = $"/body/tbl[{tblIdx + 1}]/tr[{rowIdx}]/tc[{cellIdx}]/oMathPara[{mathParaIdx + 1}]",
+                                            Type = "equation",
+                                            Text = latex,
+                                            Format = { ["mode"] = "display" }
+                                        });
+                                    }
+                                    continue;
+                                }
+
+                                // Inline equations inside table cell paragraphs
+                                int cellMathIdx = 0;
+                                foreach (var oMath in cellPara.ChildElements.Where(e => e.LocalName == "oMath" || e is M.OfficeMath))
+                                {
+                                    var latex = FormulaParser.ToLatex(oMath);
+                                    if (parsed.ContainsText == null || latex.Contains(parsed.ContainsText))
+                                    {
+                                        results.Add(new DocumentNode
+                                        {
+                                            Path = $"/body/tbl[{tblIdx + 1}]/tr[{rowIdx}]/tc[{cellIdx}]/p[{cellParaIdx}]/oMath[{cellMathIdx + 1}]",
+                                            Type = "equation",
+                                            Text = latex,
+                                            Format = { ["mode"] = "inline" }
+                                        });
+                                    }
+                                    cellMathIdx++;
+                                }
+                            }
+                        }
+                    }
+                }
                 continue;
             }
 
