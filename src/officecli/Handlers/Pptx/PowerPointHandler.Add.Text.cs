@@ -32,11 +32,8 @@ public partial class PowerPointHandler
                 var eqShapeTree = GetSlide(eqSlidePart).CommonSlideData?.ShapeTree
                     ?? throw new InvalidOperationException("Slide has no shape tree");
 
-                var eqShapeId = eqShapeTree.ChildElements
-                    .Select(e => e.Descendants<NonVisualDrawingProperties>().FirstOrDefault()?.Id?.Value ?? 0)
-                    .DefaultIfEmpty(1U)
-                    .Max() + 1;
-                var eqShapeName = properties.GetValueOrDefault("name", $"Equation {eqShapeId}");
+                var eqShapeId = GenerateUniqueShapeId(eqShapeTree);
+                var eqShapeName = properties.GetValueOrDefault("name", $"Equation {eqShapeTree.Elements<Shape>().Count() + 1}");
 
                 // Parse formula to OMML
                 var mathContent = FormulaParser.Parse(eqFormula);
@@ -117,8 +114,7 @@ public partial class PowerPointHandler
                 }
                 eqSlide.Save();
 
-                var eqShapeCount = eqShapeTree.Elements<Shape>().Count();
-                return $"/slide[{eqSlideIdx}]/shape[{eqShapeCount}]";
+                return $"/slide[{eqSlideIdx}]/{BuildElementPathSegment("shape", eqShape, eqShapeTree.Elements<Shape>().Count())}";
     }
 
 
@@ -225,7 +221,7 @@ public partial class PowerPointHandler
 
                 var paraCount = textBody.Elements<Drawing.Paragraph>().Count();
                 GetSlide(paraSlidePart).Save();
-                return $"/slide[{paraSlideIdx}]/shape[{paraShapeIdx}]/paragraph[{paraCount}]";
+                return $"/slide[{paraSlideIdx}]/{BuildElementPathSegment("shape", paraShape, paraShapeIdx)}/paragraph[{paraCount}]";
     }
 
 
@@ -329,7 +325,7 @@ public partial class PowerPointHandler
 
                 var runCount = targetPara.Elements<Drawing.Run>().Count();
                 GetSlide(runSlidePart).Save();
-                return $"/slide[{runSlideIdx}]/shape[{runShapeIdx}]/paragraph[{targetParaIdx}]/run[{runCount}]";
+                return $"/slide[{runSlideIdx}]/{BuildElementPathSegment("shape", runShape, runShapeIdx)}/paragraph[{targetParaIdx}]/run[{runCount}]";
     }
 
 

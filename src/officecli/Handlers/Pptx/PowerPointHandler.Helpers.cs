@@ -30,6 +30,173 @@ public partial class PowerPointHandler
     }
 
     /// <summary>
+    /// Resolve InsertPosition (After/Before anchor path) to a 0-based int? index for PPT.
+    /// Anchor path can be full (/slide[1]/shape[@id=X]) or short (shape[@id=X]).
+    /// </summary>
+    private int? ResolveAnchorPosition(string parentPath, InsertPosition? position)
+    {
+        if (position == null) return null;
+        if (position.Index.HasValue) return position.Index;
+
+        var anchorPath = position.After ?? position.Before!;
+
+        // Normalize: if short form, prepend parentPath
+        if (!anchorPath.StartsWith("/"))
+            anchorPath = parentPath.TrimEnd('/') + "/" + anchorPath;
+
+        // Resolve @id=/@name= in the anchor path
+        anchorPath = ResolveIdPath(anchorPath);
+
+        // For slide-level anchors (/slide[N])
+        var slideMatch = Regex.Match(anchorPath, @"^/slide\[(\d+)\]$");
+        if (slideMatch.Success)
+        {
+            var slideIdx = int.Parse(slideMatch.Groups[1].Value) - 1; // 0-based
+            var slideCount = GetSlideParts().Count();
+            if (position.After != null)
+                return slideIdx + 1 >= slideCount ? null : slideIdx + 1;
+            else
+                return slideIdx;
+        }
+
+        // For element-level anchors (/slide[N]/shape[M], /slide[N]/table[M], etc.)
+        var elemMatch = Regex.Match(anchorPath, @"^/slide\[(\d+)\]/(\w+)\[(\d+)\]$");
+        if (elemMatch.Success)
+        {
+            var elemIdx = int.Parse(elemMatch.Groups[3].Value) - 1; // 0-based
+            if (position.After != null)
+                return elemIdx + 1; // InsertAtPosition handles bounds
+            else
+                return elemIdx;
+        }
+
+        throw new ArgumentException($"Cannot resolve anchor path: {anchorPath}");
+    }
+
+    /// <summary>
+    /// Resolve @id= and @name= attribute selectors in a PPT path to positional indices.
+    /// E.g. /slide[1]/shape[@id=5] → /slide[1]/shape[N] where N is the positional index of shape with cNvPr.Id=5.
+    /// </summary>
+    private string ResolveIdPath(string path)
+    {
+        // Quick check: if no [@, nothing to resolve
+        if (!path.Contains("[@"))
+            return path;
+
+        return Regex.Replace(path, @"(\w+)\[@(id|name)=([^\]]+)\]", m =>
+        {
+            var elementType = m.Groups[1].Value.ToLowerInvariant();
+            var attrName = m.Groups[2].Value.ToLowerInvariant();
+            var attrValue = m.Groups[3].Value.Trim('"', '\'', ' ');
+
+            // Extract slide index from the path prefix before this match
+            var prefix = path[..m.Index];
+            var slideMatch = Regex.Match(prefix, @"/slide\[(\d+)\]");
+            if (!slideMatch.Success)
+                throw new ArgumentException($"Cannot resolve @{attrName}= outside of a slide context: {path}");
+            var slideIdx = int.Parse(slideMatch.Groups[1].Value);
+
+            var slideParts = GetSlideParts().ToList();
+            if (slideIdx < 1 || slideIdx > slideParts.Count)
+                throw new ArgumentException($"Slide {slideIdx} not found (total: {slideParts.Count})");
+            var slidePart = slideParts[slideIdx - 1];
+            var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree;
+            if (shapeTree == null)
+                throw new ArgumentException($"Slide {slideIdx} has no shape tree");
+
+            var positionalIdx = FindElementByAttr(shapeTree, elementType, attrName, attrValue);
+            return $"{m.Groups[1].Value}[{positionalIdx}]";
+        });
+    }
+
+    /// <summary>
+    /// Find the 1-based positional index of an element within its type group by @id= or @name=.
+    /// </summary>
+    private static int FindElementByAttr(ShapeTree shapeTree, string elementType, string attrName, string attrValue)
+    {
+        var elements = elementType switch
+        {
+            "shape" or "textbox" or "title" or "equation" => shapeTree.Elements<Shape>()
+                .Select(s => (element: (OpenXmlElement)s, nvPr: s.NonVisualShapeProperties?.NonVisualDrawingProperties)).ToList(),
+            "picture" or "pic" or "image" => shapeTree.Elements<Picture>()
+                .Select(p => (element: (OpenXmlElement)p, nvPr: p.NonVisualPictureProperties?.NonVisualDrawingProperties)).ToList(),
+            "table" => shapeTree.Elements<GraphicFrame>()
+                .Where(gf => gf.Descendants<Drawing.Table>().Any())
+                .Select(gf => (element: (OpenXmlElement)gf, nvPr: gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties)).ToList(),
+            "chart" => shapeTree.Elements<GraphicFrame>()
+                .Where(gf => gf.Descendants<DocumentFormat.OpenXml.Drawing.Charts.ChartReference>().Any() || IsExtendedChartFrame(gf))
+                .Select(gf => (element: (OpenXmlElement)gf, nvPr: gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties)).ToList(),
+            "connector" or "connection" => shapeTree.Elements<ConnectionShape>()
+                .Select(c => (element: (OpenXmlElement)c, nvPr: c.NonVisualConnectionShapeProperties?.NonVisualDrawingProperties)).ToList(),
+            "group" => shapeTree.Elements<GroupShape>()
+                .Select(g => (element: (OpenXmlElement)g, nvPr: g.NonVisualGroupShapeProperties?.NonVisualDrawingProperties)).ToList(),
+            "video" or "audio" => shapeTree.Elements<Picture>()
+                .Select(p => (element: (OpenXmlElement)p, nvPr: p.NonVisualPictureProperties?.NonVisualDrawingProperties)).ToList(),
+            _ => throw new ArgumentException($"Unknown element type '{elementType}' for @{attrName}= addressing")
+        };
+
+        for (int i = 0; i < elements.Count; i++)
+        {
+            var nvPr = elements[i].nvPr;
+            if (nvPr == null) continue;
+
+            if (attrName == "id" && nvPr.Id?.Value.ToString() == attrValue)
+                return i + 1;
+            if (attrName == "name" && string.Equals(nvPr.Name?.Value, attrValue, StringComparison.OrdinalIgnoreCase))
+                return i + 1;
+        }
+
+        throw new ArgumentException($"No {elementType} found with @{attrName}={attrValue}");
+    }
+
+    /// <summary>
+    /// Generate a unique random cNvPr.Id for a slide's shape tree.
+    /// Uses random uint to avoid collisions (same approach as Word paraId).
+    /// </summary>
+    private static uint GenerateUniqueShapeId(ShapeTree shapeTree)
+    {
+        var usedIds = new HashSet<uint>();
+        foreach (var nvPr in shapeTree.Descendants<NonVisualDrawingProperties>())
+        {
+            if (nvPr.Id?.HasValue == true)
+                usedIds.Add(nvPr.Id.Value);
+        }
+
+        uint newId;
+        do { newId = (uint)Random.Shared.Next(2, int.MaxValue); } while (usedIds.Contains(newId));
+        return newId;
+    }
+
+    /// <summary>
+    /// Get the cNvPr.Id for an element, or null if not available.
+    /// Works for Shape, Picture, GraphicFrame, ConnectionShape, GroupShape.
+    /// </summary>
+    internal static uint? GetCNvPrId(OpenXmlElement element)
+    {
+        return element switch
+        {
+            Shape s => s.NonVisualShapeProperties?.NonVisualDrawingProperties?.Id?.Value,
+            Picture p => p.NonVisualPictureProperties?.NonVisualDrawingProperties?.Id?.Value,
+            GraphicFrame gf => gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties?.Id?.Value,
+            ConnectionShape c => c.NonVisualConnectionShapeProperties?.NonVisualDrawingProperties?.Id?.Value,
+            GroupShape g => g.NonVisualGroupShapeProperties?.NonVisualDrawingProperties?.Id?.Value,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Build a path segment using @id= if the element has a cNvPr.Id, otherwise use positional index.
+    /// E.g. "shape[@id=5]" or "shape[2]".
+    /// </summary>
+    internal static string BuildElementPathSegment(string elementType, OpenXmlElement element, int positionalIndex)
+    {
+        var id = GetCNvPrId(element);
+        return id.HasValue
+            ? $"{elementType}[@id={id.Value}]"
+            : $"{elementType}[{positionalIndex}]";
+    }
+
+    /// <summary>
     /// Find existing Transition element or create one, avoiding duplicates with unknown-element transitions.
     /// </summary>
     private static Transition FindOrCreateTransition(Slide slide)

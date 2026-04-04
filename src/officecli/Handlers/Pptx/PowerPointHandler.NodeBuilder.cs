@@ -57,9 +57,10 @@ public partial class PowerPointHandler
         {
             grpIdx++;
             var grpName = grp.NonVisualGroupShapeProperties?.NonVisualDrawingProperties?.Name?.Value ?? "Group";
+            var grpPathSeg = BuildElementPathSegment("group", grp, grpIdx);
             var grpNode = new DocumentNode
             {
-                Path = $"/slide[{slideNum}]/group[{grpIdx}]",
+                Path = $"/slide[{slideNum}]/{grpPathSeg}",
                 Type = "group",
                 Preview = grpName,
                 ChildCount = grp.Elements<Shape>().Count() + grp.Elements<Picture>().Count()
@@ -110,15 +111,18 @@ public partial class PowerPointHandler
         var cols = rows.FirstOrDefault()?.Elements<Drawing.TableCell>().Count() ?? 0;
         var name = gf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties?.Name?.Value ?? "Table";
 
+        var tblPathSeg = BuildElementPathSegment("table", gf, tblIdx);
         var node = new DocumentNode
         {
-            Path = $"/slide[{slideNum}]/table[{tblIdx}]",
+            Path = $"/slide[{slideNum}]/{tblPathSeg}",
             Type = "table",
             Preview = $"{name} ({rows.Count}x{cols})",
             ChildCount = rows.Count
         };
 
         node.Format["name"] = name;
+        var tblId = GetCNvPrId(gf);
+        if (tblId.HasValue) node.Format["id"] = tblId.Value;
         node.Format["rows"] = rows.Count;
         node.Format["cols"] = cols;
 
@@ -173,7 +177,7 @@ public partial class PowerPointHandler
                 rIdx++;
                 var rowNode = new DocumentNode
                 {
-                    Path = $"/slide[{slideNum}]/table[{tblIdx}]/tr[{rIdx}]",
+                    Path = $"/slide[{slideNum}]/{tblPathSeg}/tr[{rIdx}]",
                     Type = "tr",
                     ChildCount = row.Elements<Drawing.TableCell>().Count()
                 };
@@ -191,7 +195,7 @@ public partial class PowerPointHandler
                         var cellText = cell.TextBody?.InnerText ?? "";
                         var cellNode = new DocumentNode
                         {
-                            Path = $"/slide[{slideNum}]/table[{tblIdx}]/tr[{rIdx}]/tc[{cIdx}]",
+                            Path = $"/slide[{slideNum}]/{tblPathSeg}/tr[{rIdx}]/tc[{cIdx}]",
                             Type = "tc",
                             Text = cellText
                         };
@@ -319,15 +323,18 @@ public partial class PowerPointHandler
             && shape.TextBody.Descendants().Any(e => e.LocalName == "oMath" || e.LocalName == "oMathPara"
                 || (e.LocalName == "m" && e.NamespaceUri == "http://schemas.microsoft.com/office/drawing/2010/main"));
 
+        var shapePathSeg = BuildElementPathSegment("shape", shape, shapeIdx);
         var node = new DocumentNode
         {
-            Path = $"/slide[{slideNum}]/shape[{shapeIdx}]",
+            Path = $"/slide[{slideNum}]/{shapePathSeg}",
             Type = isTitle ? "title" : isEquation ? "equation" : "textbox",
             Text = text,
             Preview = string.IsNullOrEmpty(text) ? name : (text.Length > 50 ? text[..50] + "..." : text)
         };
 
         node.Format["name"] = name;
+        var shapeId = GetCNvPrId(shape);
+        if (shapeId.HasValue) node.Format["id"] = shapeId.Value;
         if (isTitle) node.Format["isTitle"] = true;
 
         // Position and size
@@ -733,7 +740,7 @@ public partial class PowerPointHandler
 
                     var paraNode = new DocumentNode
                     {
-                        Path = $"/slide[{slideNum}]/shape[{shapeIdx}]/paragraph[{paraIdx + 1}]",
+                        Path = $"/slide[{slideNum}]/{shapePathSeg}/paragraph[{paraIdx + 1}]",
                         Type = "paragraph",
                         Text = paraText,
                         ChildCount = paraRuns.Count
@@ -768,7 +775,7 @@ public partial class PowerPointHandler
                         foreach (var run in paraRuns)
                         {
                             paraNode.Children.Add(RunToNode(run,
-                                $"/slide[{slideNum}]/shape[{shapeIdx}]/paragraph[{paraIdx + 1}]/run[{runIdx + 1}]", part));
+                                $"/slide[{slideNum}]/{shapePathSeg}/paragraph[{paraIdx + 1}]/run[{runIdx + 1}]", part));
                             runIdx++;
                         }
                     }
@@ -854,14 +861,17 @@ public partial class PowerPointHandler
         var isAudio = nvPr?.GetFirstChild<Drawing.AudioFromFile>() != null;
         var mediaType = isVideo ? "video" : isAudio ? "audio" : "picture";
 
+        var picPathSeg = BuildElementPathSegment("picture", pic, picIdx);
         var node = new DocumentNode
         {
-            Path = $"/slide[{slideNum}]/picture[{picIdx}]",
+            Path = $"/slide[{slideNum}]/{picPathSeg}",
             Type = mediaType,
             Preview = name
         };
 
         node.Format["name"] = name;
+        var picId = GetCNvPrId(pic);
+        if (picId.HasValue) node.Format["id"] = picId.Value;
         if (!isVideo && !isAudio)
         {
             if (!string.IsNullOrEmpty(alt)) node.Format["alt"] = alt;
@@ -1011,13 +1021,16 @@ public partial class PowerPointHandler
     private static DocumentNode ConnectorToNode(ConnectionShape cxn, int slideNum, int cxnIdx)
     {
         var name = cxn.NonVisualConnectionShapeProperties?.NonVisualDrawingProperties?.Name?.Value ?? "Connector";
+        var cxnPathSeg = BuildElementPathSegment("connector", cxn, cxnIdx);
         var node = new DocumentNode
         {
-            Path = $"/slide[{slideNum}]/connector[{cxnIdx}]",
+            Path = $"/slide[{slideNum}]/{cxnPathSeg}",
             Type = "connector",
             Preview = name
         };
         node.Format["name"] = name;
+        var cxnId = GetCNvPrId(cxn);
+        if (cxnId.HasValue) node.Format["id"] = cxnId.Value;
 
         var spPr = cxn.ShapeProperties;
         var xfrm = spPr?.GetFirstChild<Drawing.Transform2D>();

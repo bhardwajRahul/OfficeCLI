@@ -88,8 +88,8 @@ public partial class WordHandler
             }
         }
 
-        // Footnote/Endnote paths: /footnote[N], /endnote[N]
-        var fnMatch = System.Text.RegularExpressions.Regex.Match(path, @"^/footnote\[(\d+)\]$");
+        // Footnote/Endnote paths: /footnote[N], /footnote[@footnoteId=N], /endnote[N], /endnote[@endnoteId=N]
+        var fnMatch = System.Text.RegularExpressions.Regex.Match(path, @"^/footnote\[(?:@footnoteId=)?(\d+)\]$");
         if (fnMatch.Success)
         {
             var fnId = int.Parse(fnMatch.Groups[1].Value);
@@ -97,11 +97,12 @@ public partial class WordHandler
                 .Elements<Footnote>().FirstOrDefault(f => f.Id?.Value == fnId);
             if (fn == null)
                 throw new ArgumentException($"Footnote {fnId} not found");
-            var fnNode = new DocumentNode { Path = path, Type = "footnote" };
-            fnNode.Text = string.Join("", fn.Descendants<Text>().Select(t => t.Text));
+            var fnNode = new DocumentNode { Path = $"/footnote[@footnoteId={fnId}]", Type = "footnote" };
+            fnNode.Text = GetFootnoteText(fn);
+            if (fn.Id?.Value != null) fnNode.Format["id"] = fn.Id.Value;
             return fnNode;
         }
-        var enMatch = System.Text.RegularExpressions.Regex.Match(path, @"^/endnote\[(\d+)\]$");
+        var enMatch = System.Text.RegularExpressions.Regex.Match(path, @"^/endnote\[(?:@endnoteId=)?(\d+)\]$");
         if (enMatch.Success)
         {
             var enId = int.Parse(enMatch.Groups[1].Value);
@@ -109,8 +110,9 @@ public partial class WordHandler
                 .Elements<Endnote>().FirstOrDefault(e => e.Id?.Value == enId);
             if (en == null)
                 throw new ArgumentException($"Endnote {enId} not found");
-            var enNode = new DocumentNode { Path = path, Type = "endnote" };
+            var enNode = new DocumentNode { Path = $"/endnote[@endnoteId={enId}]", Type = "endnote" };
             enNode.Text = string.Join("", en.Descendants<Text>().Select(t => t.Text));
+            if (en.Id?.Value != null) enNode.Format["id"] = en.Id.Value;
             return enNode;
         }
 
@@ -536,7 +538,8 @@ public partial class WordHandler
             int pIdx = 0;
             foreach (var para in header.Elements<Paragraph>())
             {
-                node.Children.Add(ElementToNode(para, $"{path}/p[{pIdx + 1}]", depth - 1));
+                var paraSegment = BuildParaPathSegment(para, pIdx + 1);
+                node.Children.Add(ElementToNode(para, $"{path}/{paraSegment}", depth - 1));
                 pIdx++;
             }
         }
@@ -592,7 +595,8 @@ public partial class WordHandler
             int pIdx = 0;
             foreach (var para in footer.Elements<Paragraph>())
             {
-                node.Children.Add(ElementToNode(para, $"{path}/p[{pIdx + 1}]", depth - 1));
+                var paraSegment = BuildParaPathSegment(para, pIdx + 1);
+                node.Children.Add(ElementToNode(para, $"{path}/{paraSegment}", depth - 1));
                 pIdx++;
             }
         }
@@ -775,7 +779,7 @@ public partial class WordHandler
                 if (sdt is SdtBlock)
                 {
                     blockSdtIdx++;
-                    sdtPath = $"/body/sdt[{blockSdtIdx}]";
+                    sdtPath = $"/body/{BuildSdtPathSegment(sdt, blockSdtIdx)}";
                 }
                 else if (sdt is SdtRun sdtRun)
                 {
@@ -794,12 +798,12 @@ public partial class WordHandler
                             if (child == sdtRun) break;
                             if (child is SdtRun) sdtInParaIdx++;
                         }
-                        sdtPath = $"/body/p[{pIdx}]/sdt[{sdtInParaIdx}]";
+                        sdtPath = $"/body/{BuildParaPathSegment(parentPara, pIdx)}/{BuildSdtPathSegment(sdt, sdtInParaIdx)}";
                     }
                     else
                     {
                         blockSdtIdx++;
-                        sdtPath = $"/body/sdt[{blockSdtIdx}]";
+                        sdtPath = $"/body/{BuildSdtPathSegment(sdt, blockSdtIdx)}";
                     }
                 }
                 else continue;
@@ -872,7 +876,7 @@ public partial class WordHandler
                     var drawing = run.GetFirstChild<Drawing>();
                     if (drawing != null)
                     {
-                        var node = CreateImageNode(drawing, run, $"/body/p[{mediaPIdx + 1}]/r[{mediaRIdx + 1}]");
+                        var node = CreateImageNode(drawing, run, $"/body/{BuildParaPathSegment(para, mediaPIdx + 1)}/r[{mediaRIdx + 1}]");
                         // Add content type from image part
                         var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
                         if (blip?.Embed?.Value != null)
@@ -975,7 +979,7 @@ public partial class WordHandler
                         continue;
                     var cNode = new DocumentNode
                     {
-                        Path = $"/comments/comment[{cIdx}]",
+                        Path = comment.Id?.Value != null ? $"/comments/comment[@commentId={comment.Id.Value}]" : $"/comments/comment[{cIdx}]",
                         Type = "comment",
                         Text = text
                     };
@@ -1007,12 +1011,12 @@ public partial class WordHandler
                     // Skip separator/continuation footnotes (type != null means special)
                     if (fn.Type?.Value != null) continue;
                     fnIdx++;
-                    var text = string.Join("", fn.Descendants<Text>().Select(t => t.Text));
+                    var text = GetFootnoteText(fn);
                     if (parsed.ContainsText != null && !text.Contains(parsed.ContainsText, StringComparison.OrdinalIgnoreCase))
                         continue;
                     var fnNode = new DocumentNode
                     {
-                        Path = $"/footnote[{fn.Id?.Value ?? fnIdx}]",
+                        Path = fn.Id?.Value != null ? $"/footnote[@footnoteId={fn.Id.Value}]" : $"/footnote[{fnIdx}]",
                         Type = "footnote",
                         Text = text
                     };
@@ -1036,12 +1040,12 @@ public partial class WordHandler
                     // Skip separator/continuation endnotes (type != null means special)
                     if (en.Type?.Value != null) continue;
                     enIdx++;
-                    var text = string.Join("", en.Descendants<Text>().Select(t => t.Text));
+                    var text = GetFootnoteText(en);
                     if (parsed.ContainsText != null && !text.Contains(parsed.ContainsText, StringComparison.OrdinalIgnoreCase))
                         continue;
                     var enNode = new DocumentNode
                     {
-                        Path = $"/endnote[{en.Id?.Value ?? enIdx}]",
+                        Path = en.Id?.Value != null ? $"/endnote[@endnoteId={en.Id.Value}]" : $"/endnote[{enIdx}]",
                         Type = "endnote",
                         Text = text
                     };
@@ -1165,7 +1169,7 @@ public partial class WordHandler
                         if (child is Hyperlink) hlInParaIdx++;
                     }
                 }
-                var hlPath = $"/body/p[{pIdx}]/hyperlink[{hlInParaIdx}]";
+                var hlPath = parentPara != null ? $"/body/{BuildParaPathSegment(parentPara, pIdx)}/hyperlink[{hlInParaIdx}]" : $"/body/p[{pIdx}]/hyperlink[{hlInParaIdx}]";
                 var node = ElementToNode(hl, hlPath, 0);
 
                 // Filter by attributes
@@ -1213,7 +1217,7 @@ public partial class WordHandler
                 if (sdt is SdtBlock)
                 {
                     blockSdtIdx++;
-                    path = $"/body/sdt[{blockSdtIdx}]";
+                    path = $"/body/{BuildSdtPathSegment(sdt, blockSdtIdx)}";
                 }
                 else if (sdt is SdtRun sdtRun)
                 {
@@ -1233,18 +1237,18 @@ public partial class WordHandler
                             if (child == sdtRun) break;
                             if (child is SdtRun) sdtInParaIdx++;
                         }
-                        path = $"/body/p[{pIdx}]/sdt[{sdtInParaIdx}]";
+                        path = $"/body/{BuildParaPathSegment(parentPara, pIdx)}/{BuildSdtPathSegment(sdt, sdtInParaIdx)}";
                     }
                     else
                     {
                         blockSdtIdx++;
-                        path = $"/body/sdt[{blockSdtIdx}]";
+                        path = $"/body/{BuildSdtPathSegment(sdt, blockSdtIdx)}";
                     }
                 }
                 else
                 {
                     blockSdtIdx++;
-                    path = $"/body/sdt[{blockSdtIdx}]";
+                    path = $"/body/{BuildSdtPathSegment(sdt, blockSdtIdx)}";
                 }
                 var node = ElementToNode(sdt, path, 0);
                 if (parsed.ContainsText != null && !(node.Text?.Contains(parsed.ContainsText, StringComparison.OrdinalIgnoreCase) ?? false))
@@ -1401,7 +1405,7 @@ public partial class WordHandler
                         {
                             results.Add(new DocumentNode
                             {
-                                Path = $"/body/p[{paraIdx + 1}]/oMath[{mathIdx + 1}]",
+                                Path = $"/body/{BuildParaPathSegment(para, paraIdx + 1)}/oMath[{mathIdx + 1}]",
                                 Type = "equation",
                                 Text = latex,
                                 Format = { ["mode"] = "inline" }
@@ -1423,11 +1427,11 @@ public partial class WordHandler
                             {
                                 var docProps = drawing.Descendants<DW.DocProperties>().FirstOrDefault();
                                 if (string.IsNullOrEmpty(docProps?.Description?.Value))
-                                    results.Add(CreateImageNode(drawing, run, $"/body/p[{paraIdx + 1}]/r[{runIdx + 1}]"));
+                                    results.Add(CreateImageNode(drawing, run, $"/body/{BuildParaPathSegment(para, paraIdx + 1)}/r[{runIdx + 1}]"));
                             }
                             else
                             {
-                                results.Add(CreateImageNode(drawing, run, $"/body/p[{paraIdx + 1}]/r[{runIdx + 1}]"));
+                                results.Add(CreateImageNode(drawing, run, $"/body/{BuildParaPathSegment(para, paraIdx + 1)}/r[{runIdx + 1}]"));
                             }
                         }
                         runIdx++;
@@ -1441,7 +1445,7 @@ public partial class WordHandler
                     {
                         if (MatchesRunSelector(run, para, parsed))
                         {
-                            results.Add(ElementToNode(run, $"/body/p[{paraIdx + 1}]/r[{runIdx + 1}]", 0));
+                            results.Add(ElementToNode(run, $"/body/{BuildParaPathSegment(para, paraIdx + 1)}/r[{runIdx + 1}]", 0));
                         }
                         runIdx++;
                     }
@@ -1450,7 +1454,7 @@ public partial class WordHandler
                 {
                     if (MatchesSelector(para, parsed, paraIdx))
                     {
-                        results.Add(ElementToNode(para, $"/body/p[{paraIdx + 1}]", 0));
+                        results.Add(ElementToNode(para, $"/body/{BuildParaPathSegment(para, paraIdx + 1)}", 0));
                     }
 
                     if (parsed.ChildSelector != null)
@@ -1460,7 +1464,7 @@ public partial class WordHandler
                         {
                             if (MatchesRunSelector(run, para, parsed.ChildSelector))
                             {
-                                results.Add(ElementToNode(run, $"/body/p[{paraIdx + 1}]/r[{runIdx + 1}]", 0));
+                                results.Add(ElementToNode(run, $"/body/{BuildParaPathSegment(para, paraIdx + 1)}/r[{runIdx + 1}]", 0));
                             }
                             runIdx++;
                         }

@@ -29,8 +29,8 @@ public partial class PowerPointHandler
                 var cxnShapeTree = GetSlide(cxnSlidePart).CommonSlideData?.ShapeTree
                     ?? throw new InvalidOperationException("Slide has no shape tree");
 
-                var cxnId = (uint)(cxnShapeTree.ChildElements.Count + 2);
-                var cxnName = properties.GetValueOrDefault("name", $"Connector {cxnId}");
+                var cxnId = GenerateUniqueShapeId(cxnShapeTree);
+                var cxnName = properties.GetValueOrDefault("name", $"Connector {cxnShapeTree.Elements<ConnectionShape>().Count() + 1}");
 
                 // Position: x1,y1 → x2,y2 or x,y,width,height
                 long cxnX = (properties.TryGetValue("x", out var cx1) || properties.TryGetValue("left", out cx1)) ? ParseEmu(cx1) : 2000000;
@@ -127,8 +127,7 @@ public partial class PowerPointHandler
                 cxnShapeTree.AppendChild(connector);
                 GetSlide(cxnSlidePart).Save();
 
-                var cxnCount = cxnShapeTree.Elements<ConnectionShape>().Count();
-                return $"/slide[{cxnSlideIdx}]/connector[{cxnCount}]";
+                return $"/slide[{cxnSlideIdx}]/{BuildElementPathSegment("connector", connector, cxnShapeTree.Elements<ConnectionShape>().Count())}";
     }
 
     /// <summary>
@@ -183,8 +182,8 @@ public partial class PowerPointHandler
                 var grpShapeTree = GetSlide(grpSlidePart).CommonSlideData?.ShapeTree
                     ?? throw new InvalidOperationException("Slide has no shape tree");
 
-                var grpId = (uint)(grpShapeTree.ChildElements.Count + 2);
-                var grpName = properties.GetValueOrDefault("name", $"Group {grpId}");
+                var grpId = GenerateUniqueShapeId(grpShapeTree);
+                var grpName = properties.GetValueOrDefault("name", $"Group {grpShapeTree.Elements<GroupShape>().Count() + 1}");
 
                 // Parse shape paths to group: shapes="1,2,3" (shape indices)
                 if (!properties.TryGetValue("shapes", out var shapesStr))
@@ -375,8 +374,8 @@ public partial class PowerPointHandler
                 var transitionDur = properties.GetValueOrDefault("transitiondur", "1000");
 
                 // Generate shape IDs
-                var zmShapeId = (uint)(zmShapeTree.ChildElements.Count + 2);
-                var zmName = properties.GetValueOrDefault("name", $"Slide Zoom {zmShapeId}");
+                var zmShapeId = GenerateUniqueShapeId(zmShapeTree);
+                var zmName = properties.GetValueOrDefault("name", $"Slide Zoom {GetZoomElements(zmShapeTree).Count + 1}");
                 var zmGuid = Guid.NewGuid().ToString("B").ToUpperInvariant();
                 var zmCreationId = Guid.NewGuid().ToString("B").ToUpperInvariant();
 

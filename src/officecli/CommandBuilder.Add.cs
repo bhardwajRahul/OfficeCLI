@@ -15,6 +15,8 @@ static partial class CommandBuilder
         var addTypeOpt = new Option<string>("--type") { Description = "Element type to add (e.g. paragraph, run, table, sheet, row, cell, slide, shape)" };
         var addFromOpt = new Option<string?>("--from") { Description = "Copy from an existing element path (e.g. /slide[1]/shape[2])" };
         var addIndexOpt = new Option<int?>("--index") { Description = "Insert position (0-based). If omitted, appends to end" };
+        var addAfterOpt = new Option<string?>("--after") { Description = "Insert after the element at this path (e.g. p[@paraId=1A2B3C4D])" };
+        var addBeforeOpt = new Option<string?>("--before") { Description = "Insert before the element at this path" };
         var addPropsOpt = new Option<string[]>("--prop") { Description = "Property to set (key=value)", AllowMultipleArgumentsPerToken = true };
         var forceOption = new Option<bool>("--force") { Description = "Force write even if document is protected" };
 
@@ -24,6 +26,8 @@ static partial class CommandBuilder
         addCommand.Add(addTypeOpt);
         addCommand.Add(addFromOpt);
         addCommand.Add(addIndexOpt);
+        addCommand.Add(addAfterOpt);
+        addCommand.Add(addBeforeOpt);
         addCommand.Add(addPropsOpt);
         addCommand.Add(jsonOption);
         addCommand.Add(forceOption);
@@ -35,8 +39,24 @@ static partial class CommandBuilder
             var type = result.GetValue(addTypeOpt);
             var from = result.GetValue(addFromOpt);
             var index = result.GetValue(addIndexOpt);
+            var after = result.GetValue(addAfterOpt);
+            var before = result.GetValue(addBeforeOpt);
             var props = result.GetValue(addPropsOpt);
             var force = result.GetValue(forceOption);
+
+            // Validate mutual exclusivity of --index, --after, --before
+            var posCount = (index.HasValue ? 1 : 0) + (after != null ? 1 : 0) + (before != null ? 1 : 0);
+            if (posCount > 1)
+                throw new OfficeCli.Core.CliException("--index, --after, and --before are mutually exclusive. Use only one.")
+                {
+                    Code = "invalid_argument",
+                    Suggestion = "Use --index for positional insert, or --after/--before for anchor-based insert."
+                };
+
+            InsertPosition? position = index.HasValue ? InsertPosition.AtIndex(index.Value)
+                : after != null ? InsertPosition.AfterElement(after)
+                : before != null ? InsertPosition.BeforeElement(before)
+                : null;
             bool hadWarnings = false;
 
             // Check document protection for .docx files
@@ -87,12 +107,14 @@ static partial class CommandBuilder
                     req.Command = "add";
                     req.Args["parent"] = parentPath;
                     req.Args["from"] = from;
-                    if (index.HasValue) req.Args["index"] = index.Value.ToString();
+                    if (position?.Index.HasValue == true) req.Args["index"] = position.Index.Value.ToString();
+                    if (position?.After != null) req.Args["after"] = position.After;
+                    if (position?.Before != null) req.Args["before"] = position.Before;
                 }, json) is {} rc) return rc != 0 ? rc : (hadWarnings ? 2 : 0);
 
                 using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
                 var oldCount = (handler as OfficeCli.Handlers.PowerPointHandler)?.GetSlideCount() ?? 0;
-                var resultPath = handler.CopyFrom(from, parentPath, index);
+                var resultPath = handler.CopyFrom(from, parentPath, position);
                 var message = $"Copied to {resultPath}";
                 if (json) Console.WriteLine(OutputFormatter.WrapEnvelopeText(message));
                 else Console.WriteLine(message);
@@ -106,7 +128,9 @@ static partial class CommandBuilder
                     req.Command = "add";
                     req.Args["parent"] = parentPath;
                     req.Args["type"] = type!;
-                    if (index.HasValue) req.Args["index"] = index.Value.ToString();
+                    if (position?.Index.HasValue == true) req.Args["index"] = position.Index.Value.ToString();
+                    if (position?.After != null) req.Args["after"] = position.After;
+                    if (position?.Before != null) req.Args["before"] = position.Before;
                     req.Props = ParsePropsArray(props);
                 }, json) is {} rc) return rc != 0 ? rc : (hadWarnings ? 2 : 0);
 
@@ -122,7 +146,7 @@ static partial class CommandBuilder
 
                 using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
                 var oldCount = (handler as OfficeCli.Handlers.PowerPointHandler)?.GetSlideCount() ?? 0;
-                var resultPath = handler.Add(parentPath, type!, index, properties);
+                var resultPath = handler.Add(parentPath, type!, position, properties);
                 var message = $"Added {type} at {resultPath}";
                 var spatialLine = GetPptSpatialLine(handler, resultPath);
                 var overlapNames = spatialLine != null ? CheckPositionOverlap(handler, resultPath) : new();
@@ -238,7 +262,7 @@ static partial class CommandBuilder
             }, json) is {} rc) return rc;
 
             using var handler = DocumentHandlerFactory.Open(file.FullName, editable: true);
-            var resultPath = handler.Move(path, to, index);
+            var resultPath = handler.Move(path, to, index.HasValue ? InsertPosition.AtIndex(index.Value) : null);
             var message = $"Moved to {resultPath}";
             if (json) Console.WriteLine(OutputFormatter.WrapEnvelopeText(message));
             else Console.WriteLine(message);

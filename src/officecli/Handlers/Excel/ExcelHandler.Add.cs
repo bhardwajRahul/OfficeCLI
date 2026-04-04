@@ -16,8 +16,9 @@ namespace OfficeCli.Handlers;
 
 public partial class ExcelHandler
 {
-    public string Add(string parentPath, string type, int? index, Dictionary<string, string> properties)
+    public string Add(string parentPath, string type, InsertPosition? position, Dictionary<string, string> properties)
     {
+        var index = position?.Index;
         // Normalize to case-insensitive lookup so camelCase keys (e.g. minColor) match lowercase lookups
         if (properties != null && properties.Comparer != StringComparer.OrdinalIgnoreCase)
             properties = new Dictionary<string, string>(properties, StringComparer.OrdinalIgnoreCase);
@@ -577,16 +578,16 @@ public partial class ExcelHandler
                 var cfType = properties.GetValueOrDefault("type", "databar").ToLowerInvariant();
                 return cfType switch
                 {
-                    "iconset" => Add(parentPath, "iconset", index, properties),
-                    "colorscale" => Add(parentPath, "colorscale", index, properties),
-                    "formula" => Add(parentPath, "formulacf", index, properties),
-                    "topn" or "top10" => Add(parentPath, "topn", index, properties),
-                    "aboveaverage" => Add(parentPath, "aboveaverage", index, properties),
-                    "uniquevalues" => Add(parentPath, "uniquevalues", index, properties),
-                    "duplicatevalues" => Add(parentPath, "duplicatevalues", index, properties),
-                    "containstext" => Add(parentPath, "containstext", index, properties),
-                    "dateoccurring" or "timeperiod" => Add(parentPath, "dateoccurring", index, properties),
-                    _ => Add(parentPath, "conditionalformatting", index, properties)
+                    "iconset" => Add(parentPath, "iconset", position, properties),
+                    "colorscale" => Add(parentPath, "colorscale", position, properties),
+                    "formula" => Add(parentPath, "formulacf", position, properties),
+                    "topn" or "top10" => Add(parentPath, "topn", position, properties),
+                    "aboveaverage" => Add(parentPath, "aboveaverage", position, properties),
+                    "uniquevalues" => Add(parentPath, "uniquevalues", position, properties),
+                    "duplicatevalues" => Add(parentPath, "duplicatevalues", position, properties),
+                    "containstext" => Add(parentPath, "containstext", position, properties),
+                    "dateoccurring" or "timeperiod" => Add(parentPath, "dateoccurring", position, properties),
+                    _ => Add(parentPath, "conditionalformatting", position, properties)
                 };
             }
 
@@ -597,15 +598,15 @@ public partial class ExcelHandler
                 if (properties.TryGetValue("type", out var cfTypeVal))
                 {
                     var cfTypeLower = cfTypeVal.ToLowerInvariant();
-                    if (cfTypeLower is "iconset") return Add(parentPath, "iconset", index, properties);
-                    if (cfTypeLower is "colorscale") return Add(parentPath, "colorscale", index, properties);
-                    if (cfTypeLower is "formula") return Add(parentPath, "formulacf", index, properties);
-                    if (cfTypeLower is "topn" or "top10") return Add(parentPath, "topn", index, properties);
-                    if (cfTypeLower is "aboveaverage") return Add(parentPath, "aboveaverage", index, properties);
-                    if (cfTypeLower is "uniquevalues") return Add(parentPath, "uniquevalues", index, properties);
-                    if (cfTypeLower is "duplicatevalues") return Add(parentPath, "duplicatevalues", index, properties);
-                    if (cfTypeLower is "containstext") return Add(parentPath, "containstext", index, properties);
-                    if (cfTypeLower is "dateoccurring" or "timeperiod") return Add(parentPath, "dateoccurring", index, properties);
+                    if (cfTypeLower is "iconset") return Add(parentPath, "iconset", position, properties);
+                    if (cfTypeLower is "colorscale") return Add(parentPath, "colorscale", position, properties);
+                    if (cfTypeLower is "formula") return Add(parentPath, "formulacf", position, properties);
+                    if (cfTypeLower is "topn" or "top10") return Add(parentPath, "topn", position, properties);
+                    if (cfTypeLower is "aboveaverage") return Add(parentPath, "aboveaverage", position, properties);
+                    if (cfTypeLower is "uniquevalues") return Add(parentPath, "uniquevalues", position, properties);
+                    if (cfTypeLower is "duplicatevalues") return Add(parentPath, "duplicatevalues", position, properties);
+                    if (cfTypeLower is "containstext") return Add(parentPath, "containstext", position, properties);
+                    if (cfTypeLower is "dateoccurring" or "timeperiod") return Add(parentPath, "dateoccurring", position, properties);
                 }
                 var cfSegments = parentPath.TrimStart('/').Split('/', 2);
                 var cfSheetName = cfSegments[0];
@@ -1507,20 +1508,20 @@ public partial class ExcelHandler
                 var sourceWorksheet = FindWorksheet(sourceSheetName)
                     ?? throw new ArgumentException($"Source sheet not found: {sourceSheetName}");
 
-                var position = properties.GetValueOrDefault("position", "")
+                var ptPosition = properties.GetValueOrDefault("position", "")
                     ?? properties.GetValueOrDefault("pos", "");
-                if (string.IsNullOrEmpty(position))
+                if (string.IsNullOrEmpty(ptPosition))
                 {
                     // Auto-position: place after the source data range
                     var rangeEnd = sourceRef.Split(':').Last();
                     var colEndMatch = System.Text.RegularExpressions.Regex.Match(rangeEnd, @"([A-Za-z]+)");
                     var nextCol = colEndMatch.Success ? IndexToColumnName(ColumnNameToIndex(colEndMatch.Value.ToUpperInvariant()) + 2) : "H";
-                    position = $"{nextCol}1";
+                    ptPosition = $"{nextCol}1";
                 }
 
                 var ptIdx = PivotTableHelper.CreatePivotTable(
                     _doc.WorkbookPart!, ptWorksheet, sourceWorksheet,
-                    sourceSheetName, sourceRef, position, properties);
+                    sourceSheetName, sourceRef, ptPosition, properties);
 
                 return $"/{ptSheetName}/pivottable[{ptIdx}]";
             }
@@ -1598,8 +1599,8 @@ public partial class ExcelHandler
             {
                 // Route to rowbreak or colbreak based on properties
                 if (properties.ContainsKey("col") || properties.ContainsKey("column"))
-                    return Add(parentPath, "colbreak", index, properties);
-                return Add(parentPath, "rowbreak", index, properties);
+                    return Add(parentPath, "colbreak", position, properties);
+                return Add(parentPath, "rowbreak", position, properties);
             }
 
             case "rowbreak":
@@ -2091,8 +2092,9 @@ public partial class ExcelHandler
     }
 
 
-    public string Move(string sourcePath, string? targetParentPath, int? index)
+    public string Move(string sourcePath, string? targetParentPath, InsertPosition? position)
     {
+        var index = position?.Index;
         var segments = sourcePath.TrimStart('/').Split('/', 2);
         var sheetName = segments[0];
         var worksheet = FindWorksheet(sheetName)
@@ -2233,8 +2235,9 @@ public partial class ExcelHandler
         return ($"/{sheetName}/row[{rowIndex2}]", $"/{sheetName}/row[{rowIndex1}]");
     }
 
-    public string CopyFrom(string sourcePath, string targetParentPath, int? index)
+    public string CopyFrom(string sourcePath, string targetParentPath, InsertPosition? position)
     {
+        var index = position?.Index;
         var segments = sourcePath.TrimStart('/').Split('/', 2);
         var sheetName = segments[0];
         var worksheet = FindWorksheet(sheetName)

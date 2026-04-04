@@ -30,13 +30,8 @@ public partial class PowerPointHandler
                     ?? throw new InvalidOperationException("Slide has no shape tree");
 
                 var text = properties.GetValueOrDefault("text", "");
-                // Use max existing ID + 1 to avoid collisions after element deletion
-                var maxExistingId = shapeTree.ChildElements
-                    .Select(e => e.Descendants<NonVisualDrawingProperties>().FirstOrDefault()?.Id?.Value ?? 0)
-                    .DefaultIfEmpty(1U)
-                    .Max();
-                var shapeId = maxExistingId + 1;
-                var shapeName = properties.GetValueOrDefault("name", $"TextBox {shapeId}");
+                var shapeId = GenerateUniqueShapeId(shapeTree);
+                var shapeName = properties.GetValueOrDefault("name", $"TextBox {shapeTree.Elements<Shape>().Count() + 1}");
 
                 // Auto-add !! prefix if the slide (or the next slide) has a morph transition
                 if (!shapeName.StartsWith("!!") && !shapeName.StartsWith("TextBox ") && !shapeName.StartsWith("Content ") && shapeName != "")
@@ -378,8 +373,7 @@ public partial class PowerPointHandler
                     ApplyShapeAnimation(slidePart, newShape, animVal);
 
                 GetSlide(slidePart).Save();
-                var shapeCount = shapeTree.Elements<Shape>().Count();
-                return $"/slide[{slideIdx}]/shape[{shapeCount}]";
+                return $"/slide[{slideIdx}]/{BuildElementPathSegment("shape", newShape, shapeTree.Elements<Shape>().Count())}";
     }
 
 

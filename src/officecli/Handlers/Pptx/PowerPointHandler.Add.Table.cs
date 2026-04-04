@@ -86,12 +86,12 @@ public partial class PowerPointHandler
                 }
                 long colWidth = tblCx / cols;
 
-                var tblId = (uint)(tblShapeTree.ChildElements.Count + 2);
+                var tblId = GenerateUniqueShapeId(tblShapeTree);
 
                 // Build GraphicFrame
                 var graphicFrame = new GraphicFrame();
                 graphicFrame.NonVisualGraphicFrameProperties = new NonVisualGraphicFrameProperties(
-                    new NonVisualDrawingProperties { Id = tblId, Name = properties.GetValueOrDefault("name", $"Table {tblId}") },
+                    new NonVisualDrawingProperties { Id = tblId, Name = properties.GetValueOrDefault("name", $"Table {tblShapeTree.Elements<GraphicFrame>().Count(gf => gf.Descendants<Drawing.Table>().Any()) + 1}") },
                     new NonVisualGraphicFrameDrawingProperties(),
                     new ApplicationNonVisualDrawingProperties()
                 );
@@ -153,7 +153,7 @@ public partial class PowerPointHandler
 
                 var tblCount = tblShapeTree.Elements<GraphicFrame>()
                     .Count(gf => gf.Descendants<Drawing.Table>().Any());
-                return $"/slide[{tblSlideIdx}]/table[{tblCount}]";
+                return $"/slide[{tblSlideIdx}]/{BuildElementPathSegment("table", graphicFrame, tblCount)}";
     }
 
 

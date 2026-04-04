@@ -209,7 +209,7 @@ public partial class WordHandler
                 imgCell.AppendChild(imgPara);
             }
             var imgPIdx = imgCell.Elements<Paragraph>().ToList().IndexOf(imgPara) + 1;
-            resultPath = $"{parentPath}/p[{imgPIdx}]";
+            resultPath = $"{parentPath}/{BuildParaPathSegment(imgPara, imgPIdx)}";
         }
         else
         {
@@ -220,12 +220,12 @@ public partial class WordHandler
             {
                 var refPara = parent.Elements<Paragraph>().ElementAt(index.Value);
                 parent.InsertBefore(imgPara, refPara);
-                resultPath = $"{parentPath}/p[{index.Value + 1}]";
+                resultPath = $"{parentPath}/{BuildParaPathSegment(imgPara, index.Value + 1)}";
             }
             else
             {
                 AppendToParent(parent, imgPara);
-                resultPath = $"{parentPath}/p[{imgParaCount + 1}]";
+                resultPath = $"{parentPath}/{BuildParaPathSegment(imgPara, imgParaCount + 1)}";
             }
         }
         return resultPath;

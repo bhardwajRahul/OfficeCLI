@@ -240,12 +240,12 @@ public partial class WordHandler
         {
             var refElement = parent.Elements<Paragraph>().ElementAt(index.Value);
             parent.InsertBefore(para, refElement);
-            resultPath = $"{parentPath}/p[{index.Value + 1}]";
+            resultPath = $"{parentPath}/{BuildParaPathSegment(para, index.Value + 1)}";
         }
         else
         {
             AppendToParent(parent, para);
-            resultPath = $"{parentPath}/p[{paraCount + 1}]";
+            resultPath = $"{parentPath}/{BuildParaPathSegment(para, paraCount + 1)}";
         }
         return resultPath;
     }

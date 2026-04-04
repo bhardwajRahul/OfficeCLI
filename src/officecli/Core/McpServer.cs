@@ -220,9 +220,15 @@ public static class McpServer
                 var parent = Arg("parent");
                 var type = Arg("type");
                 var index = ArgIntOpt("index");
+                var after = Arg("after"); if (string.IsNullOrEmpty(after)) after = null;
+                var before = Arg("before"); if (string.IsNullOrEmpty(before)) before = null;
+                var position = index.HasValue ? InsertPosition.AtIndex(index.Value)
+                    : after != null ? InsertPosition.AfterElement(after)
+                    : before != null ? InsertPosition.BeforeElement(before)
+                    : null;
                 var props = ParseProps(ArgStringArray("props"));
                 using var handler = DocumentHandlerFactory.Open(file, editable: true);
-                var resultPath = handler.Add(parent, type, index, props);
+                var resultPath = handler.Add(parent, type, position, props);
                 return $"Added {type} at {resultPath}";
             }
             case "remove":
@@ -239,8 +245,14 @@ public static class McpServer
                 var path = Arg("path");
                 var to = Arg("to"); if (string.IsNullOrEmpty(to)) to = null;
                 var index = ArgIntOpt("index");
+                var mvAfter = Arg("after"); if (string.IsNullOrEmpty(mvAfter)) mvAfter = null;
+                var mvBefore = Arg("before"); if (string.IsNullOrEmpty(mvBefore)) mvBefore = null;
+                var mvPosition = index.HasValue ? InsertPosition.AtIndex(index.Value)
+                    : mvAfter != null ? InsertPosition.AfterElement(mvAfter)
+                    : mvBefore != null ? InsertPosition.BeforeElement(mvBefore)
+                    : null;
                 using var handler = DocumentHandlerFactory.Open(file, editable: true);
-                var resultPath = handler.Move(path, to, index);
+                var resultPath = handler.Move(path, to, mvPosition);
                 return $"Moved to {resultPath}";
             }
             case "validate":

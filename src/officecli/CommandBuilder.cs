@@ -285,13 +285,13 @@ static partial class CommandBuilder
                     throw new ArgumentException("'add' command requires 'type' or 'from' field. Example: {\"command\": \"add\", \"parent\": \"/\", \"type\": \"slide\"}");
                 if (!string.IsNullOrEmpty(item.From))
                 {
-                    var resultPath = handler.CopyFrom(item.From, parentPath, item.Index);
+                    var resultPath = handler.CopyFrom(item.From, parentPath, item.Index.HasValue ? InsertPosition.AtIndex(item.Index.Value) : null);
                     return $"Copied to {resultPath}";
                 }
                 else
                 {
                     var type = item.Type ?? "";
-                    var resultPath = handler.Add(parentPath, type, item.Index, props);
+                    var resultPath = handler.Add(parentPath, type, item.Index.HasValue ? InsertPosition.AtIndex(item.Index.Value) : null, props);
                     return $"Added {type} at {resultPath}";
                 }
             }
@@ -308,7 +308,7 @@ static partial class CommandBuilder
             case "move":
             {
                 var path = item.Path ?? "/";
-                var resultPath = handler.Move(path, item.To, item.Index);
+                var resultPath = handler.Move(path, item.To, item.Index.HasValue ? InsertPosition.AtIndex(item.Index.Value) : null);
                 return $"Moved to {resultPath}";
             }
             case "view":

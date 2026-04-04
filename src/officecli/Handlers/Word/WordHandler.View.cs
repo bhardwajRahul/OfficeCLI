@@ -223,10 +223,11 @@ public partial class WordHandler
                 eqIdx++;
                 path = $"/body/oMathPara[{eqIdx}]";
             }
-            else if (element is Paragraph)
+            else if (element is Paragraph para1)
             {
                 pIdx++;
-                path = item.SdtBlock != null ? $"/body/sdt[{sdtIndexMap[item.SdtBlock]}]/p[{pIdx}]" : $"/body/p[{pIdx}]";
+                var pSeg = BuildParaPathSegment(para1, pIdx);
+                path = item.SdtBlock != null ? $"/body/sdt[{sdtIndexMap[item.SdtBlock]}]/{pSeg}" : $"/body/{pSeg}";
             }
             else if (element is Table)
             {
@@ -345,10 +346,11 @@ public partial class WordHandler
                 eqIdx++;
                 path = $"/body/oMathPara[{eqIdx}]";
             }
-            else if (element is Paragraph)
+            else if (element is Paragraph para2)
             {
                 pIdx++;
-                path = item.SdtBlock != null ? $"/body/sdt[{sdtIndexMap[item.SdtBlock]}]/p[{pIdx}]" : $"/body/p[{pIdx}]";
+                var pSeg = BuildParaPathSegment(para2, pIdx);
+                path = item.SdtBlock != null ? $"/body/sdt[{sdtIndexMap[item.SdtBlock]}]/{pSeg}" : $"/body/{pSeg}";
             }
             else if (element is Table)
             {
@@ -818,10 +820,11 @@ public partial class WordHandler
                 path = $"/body/oMathPara[{eqIdx}]";
                 type = "equation";
             }
-            else if (element is Paragraph)
+            else if (element is Paragraph para3)
             {
                 pIdx++;
-                path = item.SdtBlock != null ? $"/body/sdt[{sdtIndexMap[item.SdtBlock]}]/p[{pIdx}]" : $"/body/p[{pIdx}]";
+                var pSeg = BuildParaPathSegment(para3, pIdx);
+                path = item.SdtBlock != null ? $"/body/sdt[{sdtIndexMap[item.SdtBlock]}]/{pSeg}" : $"/body/{pSeg}";
                 type = "paragraph";
             }
             else if (element is Table)
@@ -926,7 +929,7 @@ public partial class WordHandler
                     Id = $"S{++issueNum}",
                     Type = IssueType.Structure,
                     Severity = IssueSeverity.Warning,
-                    Path = $"/body/p[{lineNum + 1}]",
+                    Path = $"/body/{BuildParaPathSegment(para, lineNum + 1)}",
                     Message = "Empty paragraph"
                 });
             }
@@ -958,7 +961,7 @@ public partial class WordHandler
                             Id = $"F{++issueNum}",
                             Type = IssueType.Format,
                             Severity = IssueSeverity.Warning,
-                            Path = $"/body/p[{lineNum + 1}]",
+                            Path = $"/body/{BuildParaPathSegment(para, lineNum + 1)}",
                             Message = "Body paragraph missing first-line indent",
                             Suggestion = "Set first-line indent to 2 characters"
                         });
@@ -979,7 +982,7 @@ public partial class WordHandler
                         Id = $"C{++issueNum}",
                         Type = IssueType.Content,
                         Severity = IssueSeverity.Warning,
-                        Path = $"/body/p[{lineNum + 1}]/r[{runIdx + 1}]",
+                        Path = $"/body/{BuildParaPathSegment(para, lineNum + 1)}/r[{runIdx + 1}]",
                         Message = "Consecutive spaces",
                         Context = text,
                         Suggestion = "Merge into a single space"
@@ -994,7 +997,7 @@ public partial class WordHandler
                         Id = $"C{++issueNum}",
                         Type = IssueType.Content,
                         Severity = IssueSeverity.Warning,
-                        Path = $"/body/p[{lineNum + 1}]/r[{runIdx + 1}]",
+                        Path = $"/body/{BuildParaPathSegment(para, lineNum + 1)}/r[{runIdx + 1}]",
                         Message = "Duplicate punctuation",
                         Context = text
                     });
@@ -1008,7 +1011,7 @@ public partial class WordHandler
                         Id = $"C{++issueNum}",
                         Type = IssueType.Content,
                         Severity = IssueSeverity.Info,
-                        Path = $"/body/p[{lineNum + 1}]/r[{runIdx + 1}]",
+                        Path = $"/body/{BuildParaPathSegment(para, lineNum + 1)}/r[{runIdx + 1}]",
                         Message = "Mixed CJK/Latin punctuation",
                         Context = text
                     });
@@ -1161,7 +1164,7 @@ public partial class WordHandler
                         if (child == sdtRun) break;
                         if (child is SdtRun) sdtInParaIdx++;
                     }
-                    path = $"/body/p[{pIdx}]/sdt[{sdtInParaIdx}]";
+                    path = $"/body/{BuildParaPathSegment(parentPara, pIdx)}/sdt[{sdtInParaIdx}]";
                 }
                 else
                 {

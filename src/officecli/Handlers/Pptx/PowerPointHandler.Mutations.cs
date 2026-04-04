@@ -16,6 +16,7 @@ public partial class PowerPointHandler
     public string? Remove(string path)
     {
         path = NormalizeCellPath(path);
+        path = ResolveIdPath(path);
 
         // Handle /slide[N]/notes path (no index bracket)
         var notesMatch = Regex.Match(path, @"^/slide\[(\d+)\]/notes$");
@@ -277,8 +278,11 @@ public partial class PowerPointHandler
         return null;
     }
 
-    public string Move(string sourcePath, string? targetParentPath, int? index)
+    public string Move(string sourcePath, string? targetParentPath, InsertPosition? position)
     {
+        var index = position?.Index;
+        sourcePath = ResolveIdPath(sourcePath);
+        if (targetParentPath != null) targetParentPath = ResolveIdPath(targetParentPath);
         var presentationPart = _doc.PresentationPart
             ?? throw new InvalidOperationException("Presentation not found");
         var slideParts = GetSlideParts().ToList();
@@ -366,6 +370,8 @@ public partial class PowerPointHandler
 
     public (string NewPath1, string NewPath2) Swap(string path1, string path2)
     {
+        path1 = ResolveIdPath(path1);
+        path2 = ResolveIdPath(path2);
         var presentationPart = _doc.PresentationPart
             ?? throw new InvalidOperationException("Presentation not found");
         var slideParts = GetSlideParts().ToList();
@@ -451,8 +457,11 @@ public partial class PowerPointHandler
         }
     }
 
-    public string CopyFrom(string sourcePath, string targetParentPath, int? index)
+    public string CopyFrom(string sourcePath, string targetParentPath, InsertPosition? position)
     {
+        var index = position?.Index;
+        sourcePath = ResolveIdPath(sourcePath);
+        targetParentPath = ResolveIdPath(targetParentPath);
         var slideParts = GetSlideParts().ToList();
 
         // Whole-slide clone: --from /slide[N] to /
@@ -464,6 +473,23 @@ public partial class PowerPointHandler
 
         var (srcSlidePart, srcElement) = ResolveSlideElement(sourcePath, slideParts);
         var clone = srcElement.CloneNode(true);
+
+        // Assign new unique cNvPr.Id to the clone to avoid duplicate IDs on the target slide
+        var cloneNvPr = clone.Descendants<NonVisualDrawingProperties>().FirstOrDefault();
+        if (cloneNvPr != null)
+        {
+            var tgtSlideMatchPre = Regex.Match(targetParentPath, @"^/slide\[(\d+)\]$");
+            if (tgtSlideMatchPre.Success)
+            {
+                var tgtIdx = int.Parse(tgtSlideMatchPre.Groups[1].Value);
+                if (tgtIdx >= 1 && tgtIdx <= slideParts.Count)
+                {
+                    var tgtTree = GetSlide(slideParts[tgtIdx - 1]).CommonSlideData?.ShapeTree;
+                    if (tgtTree != null)
+                        cloneNvPr.Id = GenerateUniqueShapeId(tgtTree);
+                }
+            }
+        }
 
         var tgtSlideMatch = Regex.Match(targetParentPath, @"^/slide\[(\d+)\]$");
         if (!tgtSlideMatch.Success)
@@ -841,6 +867,6 @@ public partial class PowerPointHandler
                 .Where(e => e.LocalName == element.LocalName)
                 .ToList().IndexOf(element) + 1;
         }
-        return $"{parentPath}/{typeName}[{typeIdx}]";
+        return $"{parentPath}/{BuildElementPathSegment(typeName, element, typeIdx)}";
     }
 }

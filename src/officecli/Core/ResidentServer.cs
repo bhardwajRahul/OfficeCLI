@@ -574,18 +574,18 @@ public class ResidentServer : IDisposable
     {
         var parentPath = req.GetArg("parent", "/body");
         var from = req.GetArgOrNull("from");
-        var index = req.GetIntArg("index");
+        var position = BuildInsertPosition(req);
 
         if (!string.IsNullOrEmpty(from))
         {
-            var resultPath = _handler.CopyFrom(from, parentPath, index);
+            var resultPath = _handler.CopyFrom(from, parentPath, position);
             Console.WriteLine($"Copied to {resultPath}");
         }
         else
         {
             var type = req.GetArg("type", "");
             var properties = req.GetProps();
-            var resultPath = _handler.Add(parentPath, type, index, properties);
+            var resultPath = _handler.Add(parentPath, type, position, properties);
             Console.WriteLine($"Added {type} at {resultPath}");
         }
     }
@@ -601,9 +601,19 @@ public class ResidentServer : IDisposable
     {
         var path = req.GetArg("path", "/");
         var to = req.GetArgOrNull("to");
-        var index = req.GetIntArg("index");
-        var resultPath = _handler.Move(path, to, index);
+        var resultPath = _handler.Move(path, to, BuildInsertPosition(req));
         Console.WriteLine($"Moved to {resultPath}");
+    }
+
+    private static InsertPosition? BuildInsertPosition(ResidentRequest req)
+    {
+        var index = req.GetIntArg("index");
+        var after = req.GetArgOrNull("after");
+        var before = req.GetArgOrNull("before");
+        if (index.HasValue) return InsertPosition.AtIndex(index.Value);
+        if (after != null) return InsertPosition.AfterElement(after);
+        if (before != null) return InsertPosition.BeforeElement(before);
+        return null;
     }
 
     private void ExecuteRaw(ResidentRequest req)

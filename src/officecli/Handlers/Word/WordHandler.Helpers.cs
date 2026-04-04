@@ -98,6 +98,18 @@ public partial class WordHandler
     private static double ParseFontSize(string value) =>
         ParseHelpers.ParseFontSize(value);
 
+    /// <summary>
+    /// Get footnote/endnote text, skipping the reference mark run and its trailing space.
+    /// </summary>
+    private static string GetFootnoteText(OpenXmlElement fnOrEn)
+    {
+        return string.Join("", fnOrEn.Descendants<Run>()
+            .Where(r => r.GetFirstChild<FootnoteReferenceMark>() == null
+                     && r.GetFirstChild<EndnoteReferenceMark>() == null)
+            .SelectMany(r => r.Elements<Text>())
+            .Select(t => t.Text)).TrimStart();
+    }
+
     private static string GetParagraphText(Paragraph para)
     {
         var sb = new StringBuilder();
@@ -198,7 +210,7 @@ public partial class WordHandler
         {
             var hasRange = paragraphs[i].Descendants<CommentRangeStart>()
                 .Any(rs => rs.Id?.Value == commentId);
-            if (hasRange) return $"/body/p[{i + 1}]";
+            if (hasRange) return $"/body/{BuildParaPathSegment(paragraphs[i], i + 1)}";
         }
         return null;
     }
@@ -1200,16 +1212,24 @@ public partial class WordHandler
 
         var paragraphs = allParagraphs.ToList();
 
-        // Collect existing IDs first to avoid collisions
+        // Collect existing IDs, detect duplicates, and assign missing IDs
+        var paraIdSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var para in paragraphs)
         {
+            // Fix duplicate paraId: if already seen, clear it so it gets reassigned below
             if (!string.IsNullOrEmpty(para.ParagraphId?.Value))
-                usedIds.Add(para.ParagraphId.Value);
+            {
+                if (!paraIdSeen.Add(para.ParagraphId.Value))
+                    para.ParagraphId = null!; // duplicate — will be reassigned
+                else
+                    usedIds.Add(para.ParagraphId.Value);
+            }
             if (!string.IsNullOrEmpty(para.TextId?.Value))
                 usedIds.Add(para.TextId.Value);
         }
 
-        // Assign IDs to paragraphs that don't have them
+        // Assign IDs to paragraphs that don't have them (including cleared duplicates)
         foreach (var para in paragraphs)
         {
             if (string.IsNullOrEmpty(para.ParagraphId?.Value))

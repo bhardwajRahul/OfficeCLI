@@ -249,8 +249,9 @@ public partial class WordHandler
         }
     }
 
-    public string Move(string sourcePath, string? targetParentPath, int? index)
+    public string Move(string sourcePath, string? targetParentPath, InsertPosition? position)
     {
+        var index = position?.Index;
         var srcParts = ParsePath(sourcePath);
         var element = NavigateToElement(srcParts)
             ?? throw new ArgumentException($"Source not found: {sourcePath}");
@@ -331,8 +332,9 @@ public partial class WordHandler
         return ($"{parentPath}/{elem1.LocalName}[{newIdx1}]", $"{parentPath}/{elem2.LocalName}[{newIdx2}]");
     }
 
-    public string CopyFrom(string sourcePath, string targetParentPath, int? index)
+    public string CopyFrom(string sourcePath, string targetParentPath, InsertPosition? position)
     {
+        var index = position?.Index;
         var srcParts = ParsePath(sourcePath);
         var element = NavigateToElement(srcParts)
             ?? throw new ArgumentException($"Source not found: {sourcePath}");

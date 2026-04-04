@@ -14,9 +14,13 @@ namespace OfficeCli.Handlers;
 
 public partial class PowerPointHandler
 {
-    public string Add(string parentPath, string type, int? index, Dictionary<string, string> properties)
+    public string Add(string parentPath, string type, InsertPosition? position, Dictionary<string, string> properties)
     {
         parentPath = NormalizeCellPath(parentPath);
+        parentPath = ResolveIdPath(parentPath);
+
+        // Resolve --after/--before to index
+        var index = ResolveAnchorPosition(parentPath, position);
 
         return type.ToLowerInvariant() switch
         {

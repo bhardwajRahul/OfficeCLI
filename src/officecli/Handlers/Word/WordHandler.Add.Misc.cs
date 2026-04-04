@@ -357,7 +357,7 @@ public partial class WordHandler
             fNewPara.AppendChild(fieldRunEnd);
             AppendToParent(parent, fNewPara);
             var fIdx2 = body.Elements<Paragraph>().TakeWhile(p => p != fNewPara).Count();
-            resultPath = $"/body/p[{fIdx2 + 1}]";
+            resultPath = $"/body/{BuildParaPathSegment(fNewPara, fIdx2 + 1)}";
         }
         return resultPath;
     }
@@ -393,7 +393,7 @@ public partial class WordHandler
         {
             brkPara.AppendChild(brkRun);
             var brkParaIdx = body.Elements<Paragraph>().TakeWhile(p => p != brkPara).Count();
-            resultPath = $"/body/p[{brkParaIdx + 1}]/r[{GetAllRuns(brkPara).Count}]";
+            resultPath = $"/body/{BuildParaPathSegment(brkPara, brkParaIdx + 1)}/r[{GetAllRuns(brkPara).Count}]";
         }
         else
         {
@@ -401,7 +401,7 @@ public partial class WordHandler
             var brkNewPara = new Paragraph(brkRun);
             AppendToParent(parent, brkNewPara);
             var brkIdx = body.Elements<Paragraph>().TakeWhile(p => p != brkNewPara).Count();
-            resultPath = $"/body/p[{brkIdx + 1}]";
+            resultPath = $"/body/{BuildParaPathSegment(brkNewPara, brkIdx + 1)}";
         }
         return resultPath;
     }
@@ -432,7 +432,8 @@ public partial class WordHandler
             var sdtProps = new SdtProperties();
 
             // ID
-            sdtProps.AppendChild(new SdtId { Val = (int)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % int.MaxValue) });
+            var inlineSdtIdVal = Random.Shared.Next(1, int.MaxValue);
+            sdtProps.AppendChild(new SdtId { Val = inlineSdtIdVal });
 
             if (!string.IsNullOrEmpty(alias))
                 sdtProps.AppendChild(new SdtAlias { Val = alias });
@@ -507,8 +508,12 @@ public partial class WordHandler
             sdtRun.AppendChild(sdtContent);
 
             ((Paragraph)parent).AppendChild(sdtRun);
-            var sdtParaIdx = body.Elements<Paragraph>().TakeWhile(p => p != parent).Count();
-            resultPath = $"/body/p[{sdtParaIdx + 1}]/sdt[{((Paragraph)parent).Elements<SdtRun>().Count()}]";
+            // Build stable @paraId= and @sdtId= based path
+            var inlineParaId = ((Paragraph)parent).ParagraphId?.Value;
+            var inlineParaSegment = !string.IsNullOrEmpty(inlineParaId)
+                ? $"p[@paraId={inlineParaId}]"
+                : $"p[{body.Elements<Paragraph>().TakeWhile(p => p != parent).Count() + 1}]";
+            resultPath = $"/body/{inlineParaSegment}/sdt[@sdtId={inlineSdtIdVal}]";
         }
         else
         {
@@ -516,7 +521,7 @@ public partial class WordHandler
             var sdtBlock = new SdtBlock();
             var sdtProps = new SdtProperties();
 
-            sdtProps.AppendChild(new SdtId { Val = (int)(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() % int.MaxValue) });
+            sdtProps.AppendChild(new SdtId { Val = Random.Shared.Next(1, int.MaxValue) });
 
             if (!string.IsNullOrEmpty(alias))
                 sdtProps.AppendChild(new SdtAlias { Val = alias });

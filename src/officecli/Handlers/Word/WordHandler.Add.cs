@@ -15,7 +15,7 @@ namespace OfficeCli.Handlers;
 
 public partial class WordHandler
 {
-    public string Add(string parentPath, string type, int? index, Dictionary<string, string> properties)
+    public string Add(string parentPath, string type, InsertPosition? position, Dictionary<string, string> properties)
     {
         var body = _doc.MainDocumentPart?.Document?.Body
             ?? throw new InvalidOperationException("Document body not found");
@@ -24,11 +24,10 @@ public partial class WordHandler
         if (parentPath is "/" or "" or "/body")
         {
             parent = body;
-            parentPath = "/body"; // Normalize so result paths are usable (e.g. /body/p[1] not //p[1])
+            parentPath = "/body";
         }
         else if (parentPath == "/styles")
         {
-            // Ensure styles part exists for style operations
             var stylesPart = _doc.MainDocumentPart!.StyleDefinitionsPart
                 ?? _doc.MainDocumentPart.AddNewPart<StyleDefinitionsPart>();
             stylesPart.Styles ??= new Styles();
@@ -40,6 +39,9 @@ public partial class WordHandler
             parent = NavigateToElement(parts, out var ctx)
                 ?? throw new ArgumentException($"Path not found: {parentPath}" + (ctx != null ? $". {ctx}" : ""));
         }
+
+        // Resolve --after/--before to index
+        var index = ResolveAnchorPosition(parent, parentPath, position);
 
         var resultPath = type.ToLowerInvariant() switch
         {

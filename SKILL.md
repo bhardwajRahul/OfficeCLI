@@ -119,6 +119,31 @@ officecli get data.xlsx '/Sheet1/B2' --json
 
 Run `officecli docx get` / `officecli xlsx get` / `officecli pptx get` for all available paths.
 
+### Stable ID Addressing
+
+Elements with stable IDs return `@attr=value` paths instead of positional indices. These paths survive insert/delete operations — use them for multi-step workflows.
+
+**Returned path format (output):**
+```
+/slide[1]/shape[@id=550950021]                    # PPT shape (cNvPr.Id)
+/slide[1]/shape[@id=550950021]/paragraph[1]       # child inherits parent's @id=
+/slide[1]/table[@id=1388430425]/tr[1]/tc[2]       # PPT table
+/body/p[@paraId=1A2B3C4D]                         # Word paragraph
+/comments/comment[@commentId=1]                    # Word comment
+/footnote[@footnoteId=2]                           # Word footnote
+/endnote[@endnoteId=1]                             # Word endnote
+/body/sdt[@sdtId=123456]                           # Word content control
+```
+
+**All formats accepted as input** — use returned paths directly for subsequent `set`/`remove`:
+```bash
+officecli set slides.pptx '/slide[1]/shape[@id=550950021]' --prop bold=true
+officecli set slides.pptx '/slide[1]/shape[@name=Title 1]' --prop text="New"   # @name= also works (PPT)
+officecli set slides.pptx '/slide[1]/shape[2]' --prop color=red                # positional still works
+```
+
+Elements without stable IDs (slide, paragraph, run, tr/tc, row) use positional indices as fallback.
+
 ### query
 
 CSS-like selectors: `[attr=value]`, `[attr!=value]`, `[attr~=text]`, `[attr>=value]`, `[attr<=value]`, `:contains("text")`, `:empty`, `:has(formula)`, `:no-alt`.
@@ -162,9 +187,18 @@ Run `officecli <format> set` for all settable elements. Run `officecli <format> 
 ### add — add elements or clone
 
 ```bash
-officecli add <file> <parent> --type <type> [--index N] [--prop ...]
-officecli add <file> <parent> --from <path> [--index N]    # clone existing element
+officecli add <file> <parent> --type <type> [--prop ...]
+officecli add <file> <parent> --type <type> --after <path> [--prop ...]   # insert after anchor
+officecli add <file> <parent> --type <type> --before <path> [--prop ...]  # insert before anchor
+officecli add <file> <parent> --type <type> --index N [--prop ...]        # insert at position (legacy)
+officecli add <file> <parent> --from <path>                               # clone existing element
 ```
+
+**Insert position** (`--after`, `--before`, `--index` are mutually exclusive):
+- `--after "p[@paraId=1A2B3C4D]"` — insert after the anchor element (short or full path)
+- `--before "/body/p[@paraId=5E6F7A8B]"` — insert before the anchor element
+- `--index N` — insert at 0-based position (legacy, prefer --after/--before)
+- No position flag — append to end (default)
 
 **Element types (with aliases):**
 
