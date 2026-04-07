@@ -993,7 +993,7 @@ public partial class ExcelHandler
                         if (part != null)
                         {
                             node.Format["contentType"] = part.ContentType;
-                            node.Format["size"] = part.GetStream().Length;
+                            node.Format["fileSize"] = part.GetStream().Length;
                         }
                     }
                     results.Add(node);

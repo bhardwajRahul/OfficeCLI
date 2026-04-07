@@ -924,7 +924,7 @@ public partial class PowerPointHandler
                         if (part != null)
                         {
                             picNode.Format["contentType"] = part.ContentType;
-                            picNode.Format["size"] = part.GetStream().Length;
+                            picNode.Format["fileSize"] = part.GetStream().Length;
                         }
                     }
                     results.Add(picNode);
