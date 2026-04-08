@@ -312,7 +312,23 @@ static partial class CommandBuilder
             if (full == null)
             {
                 var err = $"No watch process is running for {file.Name}.";
-                if (json) Console.WriteLine(OutputFormatter.WrapEnvelopeError(err));
+                // BUG-BT-R4-01: even on error the --json output must keep the
+                // {version, marks, error} shape so the SKILL.md jq pipeline
+                // (`.marks[] | ...`) doesn't crash with "Cannot iterate over
+                // null" when an agent runs the apply pipeline against a dead
+                // watch. Empty marks array is the natural "nothing to do" form;
+                // the error field carries the human-readable reason. Exit 1
+                // still signals failure to script-level checks.
+                if (json)
+                {
+                    // JSON-escape the error message manually to avoid the
+                    // reflection-based Serialize<string> overload (IL2026 trim
+                    // warning under AOT). The set of chars that actually need
+                    // escaping in this context is small.
+                    var escaped = err.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
+                    var emptyEnvelope = $"{{\"version\":0,\"marks\":[],\"error\":\"{escaped}\"}}";
+                    Console.WriteLine(emptyEnvelope);
+                }
                 else Console.Error.WriteLine(err);
                 return 1;
             }

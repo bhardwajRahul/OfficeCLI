@@ -246,19 +246,22 @@ officecli mark report.docx /body/p[7] --prop find="teh"  --prop tofix="the"  --p
 
 # 2. Review — human eyeballs the browser highlights, optionally unmarks bad proposals
 # 3. Apply — pipeline reads accepted marks and runs real set commands
+#    `.marks // []` is defensive: if the watch died mid-pipeline, get-marks
+#    still emits {version:0, marks:[], error:"..."} so jq sees an empty list
+#    instead of crashing on null. Check `$?` afterwards if you need to abort.
 officecli get-marks report.docx --json \
-  | jq -r '.marks[] | select(.tofix != null) | [.path, .find, .tofix] | @tsv' \
+  | jq -r '(.marks // []) | .[] | select(.tofix != null) | [.path, .find, .tofix] | @tsv' \
   | while IFS=$'\t' read -r path find tofix; do
       officecli set report.docx "$path" --prop "find=$find" --prop "replace=$tofix"
     done
 
 # 4. Verify — applied marks now report stale=true
-officecli get-marks report.docx --json | jq '.marks[] | {find, stale}'
+officecli get-marks report.docx --json | jq '(.marks // []) | .[] | {find, stale}'
 ```
 
-> **Perf note:** if you're running more than ~3 sequential `set` operations on a watched file, use `batch` instead — each `set` triggers a watch re-render which can take seconds. `batch` re-renders once at the end.
+> **Perf note:** if you're running more than ~3 sequential `set` operations on a watched file, use `batch --input <file.json>` instead — each `set` triggers a watch re-render which can take seconds. `batch` re-renders once at the end.
 
-All mark commands support `--json`. Server rejections produce a non-zero exit + error envelope — check the `error` field, don't assume success on empty id.
+All mark commands support `--json`. Server rejections produce a non-zero exit + error envelope. Even on error, `get-marks --json` always emits a `{version, marks, error?}` shape so the canonical apply pipeline above never crashes on `null`. Check the `error` field if you need to fail fast.
 
 ---
 
