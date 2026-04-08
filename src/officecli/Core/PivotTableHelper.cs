@@ -13,6 +13,62 @@ namespace OfficeCli.Core;
 /// </summary>
 internal static class PivotTableHelper
 {
+    // ==================== XML text sanitization (R2-2) ====================
+    //
+    // XML 1.0 only permits a narrow set of character code points in element
+    // content: Tab (U+0009), LF (U+000A), CR (U+000D), and anything in
+    // [U+0020..U+D7FF] ∪ [U+E000..U+FFFD] ∪ [U+10000..U+10FFFF]. Everything
+    // else — including the NUL byte — causes XmlWriter to throw
+    // ArgumentException at save time, which tore down PivotCacheDefinition.Save
+    // whenever a source cell contained a stray U+0000 (see FuzzPivotRound2Tests
+    // Add_Pivot_NulCharInRowValue_ShouldNotThrow).
+    //
+    // Sanitization is applied ONLY to strings that get embedded in the pivot
+    // cache (sharedItems <s v="..."/> and fieldGroup <groupItems>). The
+    // original cell values in the source sheet are untouched — we just want
+    // the cache write to succeed. Unpaired surrogates are also stripped so we
+    // don't turn one invalid form into another.
+    internal static string SanitizeXmlText(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return s ?? string.Empty;
+        System.Text.StringBuilder? sb = null;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            bool ok;
+            if (c == '\t' || c == '\n' || c == '\r') ok = true;
+            else if (c < 0x20) ok = false;
+            else if (c == 0xFFFE || c == 0xFFFF) ok = false;
+            else if (char.IsHighSurrogate(c))
+            {
+                if (i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                {
+                    if (sb != null) { sb.Append(c); sb.Append(s[i + 1]); }
+                    i++;
+                    continue;
+                }
+                ok = false;
+            }
+            else if (char.IsLowSurrogate(c)) ok = false; // unpaired trailing surrogate
+            else ok = true;
+
+            if (ok)
+            {
+                sb?.Append(c);
+            }
+            else
+            {
+                if (sb == null)
+                {
+                    sb = new System.Text.StringBuilder(s.Length);
+                    sb.Append(s, 0, i);
+                }
+                // Drop the invalid code unit entirely.
+            }
+        }
+        return sb?.ToString() ?? s;
+    }
+
     // ==================== Axis sort options ====================
     //
     // Axis labels on every level are sorted through a single comparer that
@@ -3400,7 +3456,8 @@ internal static class PivotTableHelper
             for (int i = 0; i < uniqueValues.Count; i++)
             {
                 var v = uniqueValues[i];
-                sharedItems.AppendChild(new StringItem { Val = v });
+                // R2-2: strip XML-illegal chars (e.g. U+0000) before writing.
+                sharedItems.AppendChild(new StringItem { Val = SanitizeXmlText(v) });
                 if (!valueIndex.ContainsKey(v))
                     valueIndex[v] = i;
             }
@@ -3565,7 +3622,10 @@ internal static class PivotTableHelper
 
         var groupItems = new GroupItems { Count = (uint)allItems.Count };
         foreach (var label in allItems)
-            groupItems.AppendChild(new StringItem { Val = label });
+            // R2-2: defensive sanitize — date labels are code-generated so
+            // they shouldn't contain control chars, but keep parity with the
+            // sharedItems writer in case a format spec ever changes.
+            groupItems.AppendChild(new StringItem { Val = SanitizeXmlText(label) });
         fieldGroup.AppendChild(groupItems);
 
         field.AppendChild(fieldGroup);
