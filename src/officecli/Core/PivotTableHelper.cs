@@ -14,6 +14,13 @@ namespace OfficeCli.Core;
 /// </summary>
 internal static class PivotTableHelper
 {
+    // Sentinel used to represent Excel error cells (DataType=Error, e.g. #DIV/0!)
+    // in the string[] columnData arrays passed between ReadSourceData and BuildCacheField.
+    // This value never appears in normal cell text (U+0001 prefix makes it XML-illegal
+    // for ordinary strings, so SanitizeXmlText would have stripped it). BuildCacheField
+    // emits ErrorItem instead of StringItem when it sees this sentinel.
+    internal const string ErrorCellSentinel = "\x01#ERROR";
+
     // ==================== XML text sanitization (R2-2) ====================
     //
     // XML 1.0 only permits a narrow set of character code points in element
@@ -3754,6 +3761,11 @@ internal static class PivotTableHelper
 
     private static string GetCellText(Cell cell, SharedStringTablePart? sst)
     {
+        // Error cells (DataType=Error, e.g. #DIV/0!) must not be treated as string values.
+        // Return the sentinel so BuildCacheField can emit ErrorItem instead of StringItem.
+        if (cell.DataType?.Value == CellValues.Error)
+            return ErrorCellSentinel;
+
         // Handle InlineString cells (t="inlineStr") — used by openpyxl and some other tools
         if (cell.DataType?.Value == CellValues.InlineString)
             return cell.InlineString?.InnerText ?? "";
@@ -3891,8 +3903,11 @@ internal static class PivotTableHelper
         bool forceStringIndexed = false)
     {
         var field = new CacheField { Name = name, NumberFormatId = 0u };
+        // Exclude error-cell sentinels from the numeric check — they are neither
+        // numeric nor regular strings; they will be emitted as ErrorItem elements.
         bool valuesAreNumeric = values.Length > 0 && values.All(v =>
-            string.IsNullOrEmpty(v) || double.TryParse(v, System.Globalization.CultureInfo.InvariantCulture, out _));
+            string.IsNullOrEmpty(v) || v == ErrorCellSentinel
+            || double.TryParse(v, System.Globalization.CultureInfo.InvariantCulture, out _));
         // When forceStringIndexed is true (axis fields), report isNumeric=false
         // so downstream record-writing code uses the valueIndex map to emit
         // <x v="N"/> references instead of <n v="..."/> direct values. The
@@ -3919,25 +3934,36 @@ internal static class PivotTableHelper
         // OOXML but introduces an asymmetry that Excel handles less reliably
         // (numeric data fields with item enumeration have failed to render in
         // testing, even though the file passes schema validation).
-        if (isNumeric && values.Any(v => !string.IsNullOrEmpty(v)))
+        bool hasErrorCells = values.Any(v => v == ErrorCellSentinel);
+        if (isNumeric && values.Any(v => !string.IsNullOrEmpty(v) && v != ErrorCellSentinel))
         {
-            var nums = values.Where(v => !string.IsNullOrEmpty(v))
+            var nums = values.Where(v => !string.IsNullOrEmpty(v) && v != ErrorCellSentinel)
                 .Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
             sharedItems.ContainsSemiMixedTypes = false;
             sharedItems.ContainsString = false;
             sharedItems.ContainsNumber = true;
             sharedItems.MinValue = nums.Min();
             sharedItems.MaxValue = nums.Max();
-            // No items enumerated, no count — records emit <n v="..."/> directly.
+            // No string items enumerated — records emit <n v="..."/> or index ref for errors.
         }
         else
         {
             var uniqueValues = values
-                .Where(v => !string.IsNullOrEmpty(v))
+                .Where(v => !string.IsNullOrEmpty(v) && v != ErrorCellSentinel)
                 .Distinct()
                 .OrderByAxis(v => v)
                 .ToList();
-            sharedItems.Count = (uint)uniqueValues.Count;
+            // Error cells occupy their own ErrorItem slots after the string items.
+            var uniqueErrors = values
+                .Where(v => v == ErrorCellSentinel)
+                .Distinct()
+                .ToList();
+            int totalCount = uniqueValues.Count + uniqueErrors.Count;
+            sharedItems.Count = (uint)totalCount;
+            if (hasErrorCells)
+            {
+                sharedItems.ContainsSemiMixedTypes = false;
+            }
             for (int i = 0; i < uniqueValues.Count; i++)
             {
                 var v = uniqueValues[i];
@@ -3945,6 +3971,12 @@ internal static class PivotTableHelper
                 sharedItems.AppendChild(new StringItem { Val = SanitizeXmlText(v) });
                 if (!valueIndex.ContainsKey(v))
                     valueIndex[v] = i;
+            }
+            // Emit ErrorItem elements for error-cell sentinels.
+            for (int i = 0; i < uniqueErrors.Count; i++)
+            {
+                sharedItems.AppendChild(new ErrorItem { Val = "#VALUE!" });
+                valueIndex[ErrorCellSentinel] = uniqueValues.Count + i;
             }
         }
 
@@ -4223,6 +4255,15 @@ internal static class PivotTableHelper
                 if (string.IsNullOrEmpty(v))
                 {
                     record.AppendChild(new MissingItem());
+                }
+                else if (v == ErrorCellSentinel)
+                {
+                    // Error cell — reference the ErrorItem in sharedItems if indexed, or
+                    // emit MissingItem for numeric fields that have no sharedItems index.
+                    if (fieldValueIndex[f].TryGetValue(v, out var errIdx))
+                        record.AppendChild(new FieldItem { Val = (uint)errIdx });
+                    else
+                        record.AppendChild(new MissingItem());
                 }
                 else if (fieldNumeric[f])
                 {
