@@ -1849,6 +1849,12 @@ internal static class PivotTableHelper
         // Helper: column index of grand-total cell for data field d.
         int GrandTotalColIdx(int d) => anchorColIdx + 1 + uniqueCols.Count * K + d;
 
+        // CONSISTENCY(grand-totals): mirror the 1×1×K renderer's gating. Right
+        // grand-total column = ActiveRowGrandTotals; bottom grand-total row =
+        // ActiveColGrandTotals. Cached once per render call.
+        bool emitRowGrand = ActiveRowGrandTotals;
+        bool emitColGrand = ActiveColGrandTotals;
+
         // ----- Row 0 (caption row) -----
         // K=1: data field name + col field name
         // K>1: empty + col field name (data caption is implicit per col group)
@@ -1868,14 +1874,18 @@ internal static class PivotTableHelper
             colLabelRow.AppendChild(MakeStringCell(anchorColIdx, colLabelRowIdx, headers[outerFieldIdx]));
             for (int c = 0; c < uniqueCols.Count; c++)
                 colLabelRow.AppendChild(MakeStringCell(anchorColIdx + 1 + c, colLabelRowIdx, uniqueCols[c]));
-            colLabelRow.AppendChild(MakeStringCell(anchorColIdx + 1 + uniqueCols.Count, colLabelRowIdx, totalLabel));
+            if (emitRowGrand)
+                colLabelRow.AppendChild(MakeStringCell(anchorColIdx + 1 + uniqueCols.Count, colLabelRowIdx, totalLabel));
         }
         else
         {
             for (int c = 0; c < uniqueCols.Count; c++)
                 colLabelRow.AppendChild(MakeStringCell(LeafColIdx(c, 0), colLabelRowIdx, uniqueCols[c]));
-            for (int d = 0; d < K; d++)
-                colLabelRow.AppendChild(MakeStringCell(GrandTotalColIdx(d), colLabelRowIdx, "Total " + valueFields[d].name));
+            if (emitRowGrand)
+            {
+                for (int d = 0; d < K; d++)
+                    colLabelRow.AppendChild(MakeStringCell(GrandTotalColIdx(d), colLabelRowIdx, "Total " + valueFields[d].name));
+            }
         }
         sheetData.AppendChild(colLabelRow);
 
@@ -1914,8 +1924,11 @@ internal static class PivotTableHelper
                         subRow.AppendChild(MakeNumericCell(LeafColIdx(c, d), currentRow, v, valueStyleIds[d]));
                 }
             }
-            for (int d = 0; d < K; d++)
-                subRow.AppendChild(MakeNumericCell(GrandTotalColIdx(d), currentRow, OuterRowTotal(outer, d), valueStyleIds[d]));
+            if (emitRowGrand)
+            {
+                for (int d = 0; d < K; d++)
+                    subRow.AppendChild(MakeNumericCell(GrandTotalColIdx(d), currentRow, OuterRowTotal(outer, d), valueStyleIds[d]));
+            }
             sheetData.AppendChild(subRow);
             currentRow++;
 
@@ -1933,23 +1946,32 @@ internal static class PivotTableHelper
                             leafRow.AppendChild(MakeNumericCell(LeafColIdx(c, d), currentRow, v, valueStyleIds[d]));
                     }
                 }
-                for (int d = 0; d < K; d++)
-                    leafRow.AppendChild(MakeNumericCell(GrandTotalColIdx(d), currentRow, LeafRowTotal(outer, inner, d), valueStyleIds[d]));
+                if (emitRowGrand)
+                {
+                    for (int d = 0; d < K; d++)
+                        leafRow.AppendChild(MakeNumericCell(GrandTotalColIdx(d), currentRow, LeafRowTotal(outer, inner, d), valueStyleIds[d]));
+                }
                 sheetData.AppendChild(leafRow);
                 currentRow++;
             }
         }
 
         // Grand total row.
-        var grandRow = new Row { RowIndex = (uint)currentRow };
-        grandRow.AppendChild(MakeStringCell(anchorColIdx, currentRow, totalLabel));
-        for (int c = 0; c < uniqueCols.Count; c++)
-            for (int d = 0; d < K; d++)
-                grandRow.AppendChild(MakeNumericCell(LeafColIdx(c, d), currentRow, ColTotal(uniqueCols[c], d), valueStyleIds[d]));
-        for (int d = 0; d < K; d++)
-            grandRow.AppendChild(MakeNumericCell(GrandTotalColIdx(d), currentRow,
-                Reduce(perDataField[d], valueFields[d].func), valueStyleIds[d]));
-        sheetData.AppendChild(grandRow);
+        if (emitColGrand)
+        {
+            var grandRow = new Row { RowIndex = (uint)currentRow };
+            grandRow.AppendChild(MakeStringCell(anchorColIdx, currentRow, totalLabel));
+            for (int c = 0; c < uniqueCols.Count; c++)
+                for (int d = 0; d < K; d++)
+                    grandRow.AppendChild(MakeNumericCell(LeafColIdx(c, d), currentRow, ColTotal(uniqueCols[c], d), valueStyleIds[d]));
+            if (emitRowGrand)
+            {
+                for (int d = 0; d < K; d++)
+                    grandRow.AppendChild(MakeNumericCell(GrandTotalColIdx(d), currentRow,
+                        Reduce(perDataField[d], valueFields[d].func), valueStyleIds[d]));
+            }
+            sheetData.AppendChild(grandRow);
+        }
 
         // Page filter cells reuse the single-row path's logic — same shape, same
         // layout above the table. RenderPivotIntoSheet handles them; we don't
