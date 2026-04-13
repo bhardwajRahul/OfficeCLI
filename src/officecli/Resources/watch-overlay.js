@@ -960,6 +960,7 @@
         }
         window._isDragging = false;
     }
+    var _cancelRubber = _cancelDrags;
 
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') _cancelDrags();
