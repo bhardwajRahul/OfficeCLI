@@ -546,13 +546,21 @@
         var input = document.createElement('input');
         input.type = 'text';
         input.value = editText;
-        input.style.cssText = 'width:100%;height:100%;border:none;outline:2px solid #217346;' +
+        input.style.cssText = 'min-width:100%;height:100%;border:none;outline:2px solid #217346;' +
             'padding:1px 4px;font:inherit;background:#fff;box-sizing:border-box;' +
-            'position:absolute;left:0;top:0;z-index:2000;';
+            'position:absolute;left:0;top:0;z-index:2000;white-space:nowrap;';
         td.style.position = 'relative';
+        td.style.overflow = 'visible';
         td.appendChild(input);
+        // Auto-expand width to fit content
+        function autoSize() {
+            input.style.width = '0';
+            input.style.width = Math.max(td.offsetWidth, input.scrollWidth + 8) + 'px';
+        }
+        input.addEventListener('input', autoSize);
         input.focus();
         input.select();
+        autoSize();
 
         function commit() {
             if (!_editingCell) return;
