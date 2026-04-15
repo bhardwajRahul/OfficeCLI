@@ -2506,6 +2506,64 @@ public partial class ExcelHandler
                     tokens.Select(t => new StringValue(t)));
             }
         }
+
+        // ---- Drawing anchors (R6-4) ----
+        // CONSISTENCY(sort-scope): same cell-anchored scoping as dataValidations/CF.
+        // Drawing anchors (xdr:twoCellAnchor/xdr:oneCellAnchor) pin shapes, pictures,
+        // and charts to a (col,row) pair via xdr:from (and xdr:to for twoCell). RowId
+        // is 0-indexed in OOXML, so worksheet row N ↔ RowId = N-1. Before R6-4 the
+        // sort path rewrote cell-level sidecars but left drawing RowIds untouched,
+        // which dragged pictures off their original anchor row after a reorder.
+        //
+        // Scoping rule (partial-rect): for TwoCellAnchor both From and To rows must
+        // fall inside the sort rectangle for the anchor to move. If only one end is
+        // inside, preserve the authored anchor (splitting a rectangle across
+        // reordered rows would change which cells the drawing visually covers).
+        // OneCellAnchor has only From — remap iff From is inside.
+        // Columns aren't affected by row sort, so ColId is never rewritten.
+        var drawingsPart = worksheet.DrawingsPart;
+        if (drawingsPart?.WorksheetDrawing != null)
+        {
+            bool drawingChanged = false;
+            bool RowInSortRect(uint oneBasedRow) =>
+                oneBasedRow >= (uint)row1 && oneBasedRow <= (uint)row2;
+
+            // TwoCellAnchor: remap only if both endpoints' rows are in sort rect.
+            foreach (var anchor in drawingsPart.WorksheetDrawing.Elements<XDR.TwoCellAnchor>())
+            {
+                var from = anchor.FromMarker;
+                var to = anchor.ToMarker;
+                if (from?.RowId?.Text == null || to?.RowId?.Text == null) continue;
+                if (!uint.TryParse(from.RowId.Text, out uint fromRow0)) continue;
+                if (!uint.TryParse(to.RowId.Text, out uint toRow0)) continue;
+                uint fromRow1 = fromRow0 + 1;
+                uint toRow1 = toRow0 + 1;
+                if (!RowInSortRect(fromRow1) || !RowInSortRect(toRow1)) continue;
+                if (!oldToNewRow.TryGetValue(fromRow1, out uint newFrom1)) continue;
+                if (!oldToNewRow.TryGetValue(toRow1, out uint newTo1)) continue;
+                from.RowId = new DocumentFormat.OpenXml.Drawing.Spreadsheet.RowId(
+                    (newFrom1 - 1).ToString());
+                to.RowId = new DocumentFormat.OpenXml.Drawing.Spreadsheet.RowId(
+                    (newTo1 - 1).ToString());
+                drawingChanged = true;
+            }
+
+            // OneCellAnchor: remap iff From is in sort rect.
+            foreach (var anchor in drawingsPart.WorksheetDrawing.Elements<XDR.OneCellAnchor>())
+            {
+                var from = anchor.FromMarker;
+                if (from?.RowId?.Text == null) continue;
+                if (!uint.TryParse(from.RowId.Text, out uint fromRow0)) continue;
+                uint fromRow1 = fromRow0 + 1;
+                if (!RowInSortRect(fromRow1)) continue;
+                if (!oldToNewRow.TryGetValue(fromRow1, out uint newFrom1)) continue;
+                from.RowId = new DocumentFormat.OpenXml.Drawing.Spreadsheet.RowId(
+                    (newFrom1 - 1).ToString());
+                drawingChanged = true;
+            }
+
+            if (drawingChanged) drawingsPart.WorksheetDrawing.Save();
+        }
     }
 
     /// <summary>Raw cell value for sorting: resolves SharedString/InlineString, skips number formatting. Precise column-letter match (no prefix bug).</summary>
