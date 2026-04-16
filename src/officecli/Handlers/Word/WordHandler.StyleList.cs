@@ -145,6 +145,11 @@ public partial class WordHandler
         if (srcCharScale != null)
             target.CharacterScale = srcCharScale.CloneNode(true) as CharacterScale;
 
+        // East Asian emphasis mark (w:em)
+        var srcEm = source.GetFirstChild<Emphasis>();
+        if (srcEm != null)
+            target.Emphasis = srcEm.CloneNode(true) as Emphasis;
+
         // Rendering effects: outline, shadow, emboss, imprint
         var srcOutline = source.GetFirstChild<Outline>();
         if (srcOutline != null)

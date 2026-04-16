@@ -230,6 +230,10 @@ public partial class WordHandler
             if (align != null) parts.Add($"text-align:{align}");
         }
 
+        // Paragraph-level RTL (w:bidi) — flips the paragraph direction
+        if (pProps.BiDi != null && (pProps.BiDi.Val == null || pProps.BiDi.Val.Value))
+            parts.Add("direction:rtl");
+
         // Drop cap detection — used to suppress text-indent
         var framePrForIndent = pProps.GetFirstChild<FrameProperties>();
         var hasDropCap = framePrForIndent != null &&
@@ -874,9 +878,28 @@ public partial class WordHandler
             }
         }
 
-        // RTL text direction
+        // RTL text direction — use unicode-bidi:embed so Arabic/Hebrew
+        // contextual shaping + Unicode BiDi algorithm still apply.
+        // bidi-override would force reversal, corrupting Arabic glyph order.
         if (rProps.RightToLeftText != null && (rProps.RightToLeftText.Val == null || rProps.RightToLeftText.Val.Value))
-            parts.Add("direction:rtl;unicode-bidi:bidi-override");
+            parts.Add("direction:rtl;unicode-bidi:embed");
+
+        // East Asian emphasis mark (w:em val=dot/comma/circle/underDot)
+        // → CSS text-emphasis-style, widely supported (including -webkit- prefix)
+        var emVal = rProps.Emphasis?.Val?.InnerText;
+        if (emVal != null && emVal != "none")
+        {
+            string css = emVal switch
+            {
+                "dot" => "filled dot",
+                "comma" => "filled sesame",
+                "circle" => "filled circle",
+                "underDot" => "filled dot",
+                _ => "filled",
+            };
+            var pos = emVal == "underDot" ? "under" : "over";
+            parts.Add($"text-emphasis:{css};text-emphasis-position:{pos};-webkit-text-emphasis:{css};-webkit-text-emphasis-position:{pos}");
+        }
 
         // w14 text effects (textFill, textOutline, glow, shadow, reflection)
         AppendW14CssEffects(rProps, parts);

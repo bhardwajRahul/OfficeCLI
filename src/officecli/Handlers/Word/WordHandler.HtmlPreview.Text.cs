@@ -232,6 +232,21 @@ public partial class WordHandler
         // FootnoteReferenceMark / EndnoteReferenceMark: don't skip the run, just ignore the mark element
         // (the run may also contain text that should be rendered)
 
+        // Ruby (furigana) annotation — emit <ruby>base<rt>annotation</rt></ruby>
+        var ruby = run.ChildElements.FirstOrDefault(c => c.LocalName == "ruby");
+        if (ruby != null)
+        {
+            var rubyBase = ruby.ChildElements.FirstOrDefault(c => c.LocalName == "rubyBase");
+            var rt = ruby.ChildElements.FirstOrDefault(c => c.LocalName == "rt");
+            var baseText = string.Concat(rubyBase?.Descendants<Text>().Select(t => t.Text) ?? []);
+            var rtText = string.Concat(rt?.Descendants<Text>().Select(t => t.Text) ?? []);
+            if (!string.IsNullOrEmpty(baseText))
+            {
+                sb.Append($"<ruby>{HtmlEncode(baseText)}<rt>{HtmlEncode(rtText)}</rt></ruby>");
+                return;
+            }
+        }
+
         var hasContent = run.ChildElements.Any(c =>
             c is Break || c is TabChar || c is SymbolChar || c is CarriageReturn
             || c.LocalName is "noBreakHyphen" or "softHyphen"
