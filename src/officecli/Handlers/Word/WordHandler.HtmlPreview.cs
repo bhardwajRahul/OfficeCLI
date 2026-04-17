@@ -130,14 +130,23 @@ public partial class WordHandler
         RenderBodyHtml(bodySb, body);
         _ctx.RenderingBody = false;
 
-        // Render header/footer into reusable strings
-        var headerSb = new StringBuilder();
-        RenderHeaderFooterHtml(headerSb, isHeader: true);
-        var headerHtml = headerSb.ToString();
-
-        var footerSb = new StringBuilder();
-        RenderHeaderFooterHtml(footerSb, isHeader: false);
-        var footerHtml = footerSb.ToString();
+        // #3: per-section header/footer bundles keyed by type. Resolved
+        // at this stage so the page-emit loop can pick the right variant
+        // per page (titlePg → first-page header; evenAndOddHeaders →
+        // parity-based; default otherwise).
+        var allSectionsForHf = CollectSections(body);
+        var sectionHeaders = BuildSectionHfBundles(allSectionsForHf, isHeader: true);
+        var sectionFooters = BuildSectionHfBundles(allSectionsForHf, isHeader: false);
+        var evenAndOddGlobal = _doc.MainDocumentPart?.DocumentSettingsPart?
+            .Settings?.GetFirstChild<EvenAndOddHeaders>() != null;
+        // Legacy fallback for docs that didn't come through CollectSections'
+        // per-section resolution path (e.g. no headers at body level).
+        var fallbackHeaderSb = new StringBuilder();
+        RenderHeaderFooterHtml(fallbackHeaderSb, isHeader: true);
+        var fallbackHeaderHtml = fallbackHeaderSb.ToString();
+        var fallbackFooterSb = new StringBuilder();
+        RenderHeaderFooterHtml(fallbackFooterSb, isHeader: false);
+        var footerHtml = fallbackFooterSb.ToString();
 
         // Render footnotes/endnotes
         var footnotesSb = new StringBuilder();
@@ -237,6 +246,8 @@ public partial class WordHandler
         // (decimalZero, upperRoman, …) applied to PAGE/NUMPAGES substitutions.
         int displayedPageNum = 0;
         string displayedFmt = "decimal";
+        int activeSectionIdx = 0;
+        int prevActiveSectionIdx = -1;
         for (int i = 0; i < pageList.Count; i++)
         {
             var pgContent = pageList[i];
@@ -247,6 +258,7 @@ public partial class WordHandler
                 if (lastIdx >= 0 && lastIdx < sections.Count)
                 {
                     activeLayout = GetPageLayoutFor(sections[lastIdx]);
+                    activeSectionIdx = lastIdx;
                     var pgNumType = sections[lastIdx].GetFirstChild<PageNumberType>();
                     if (pgNumType?.Start?.Value is int startVal)
                         displayedPageNum = startVal - 1; // will ++ below
@@ -260,6 +272,8 @@ public partial class WordHandler
                 pageList[i] = pgContent;
             }
             displayedPageNum++;
+            var isFirstPageOfSection = activeSectionIdx != prevActiveSectionIdx;
+            prevActiveSectionIdx = activeSectionIdx;
             // Per-page inline style carries full geometry (width / min-height
             // / padding) so sections with different page sizes or margins
             // override the base .page CSS rules.
@@ -273,7 +287,15 @@ public partial class WordHandler
                 $"{activeLayout.MarginLeftPt.ToString("0.#", ci)}pt";
             sb.AppendLine($"<div class=\"page-wrapper\" data-section=\"{i + 1}\">");
             sb.AppendLine($"<div class=\"page\" data-page=\"{i + 1}\" style=\"{pageStyle}\">");
-            if (i == 0) sb.Append(headerHtml);
+            // #3: per-page header/footer selection. titlePg → first-page
+            // variant; evenAndOddHeaders + even-numbered page → even
+            // variant; otherwise default. The per-page header lands on
+            // every page (previously only page 0 got it).
+            var pageIsEven = (i + 1) % 2 == 0;
+            var perPageHeader = PickHeaderFooter(
+                sectionHeaders, sections, activeSectionIdx,
+                isFirstPageOfSection, pageIsEven, evenAndOddGlobal, fallbackHeaderHtml);
+            sb.Append(perPageHeader);
             sb.Append($"<div class=\"page-body\"{colBodyStyle}>");
             sb.Append(pageList[i]);
             // Place footnotes on the page that contains the footnote reference
@@ -284,7 +306,15 @@ public partial class WordHandler
                 sb.Append(endnotesHtml);
             sb.Append("</div>");
             var pageNumStr = OfficeCli.Core.WordNumFmtRenderer.Render(displayedPageNum, displayedFmt);
-            sb.Append(footerTemplate
+            // #3: same picker as header — first/even/default footer variant.
+            var perPageFooter = PickHeaderFooter(
+                sectionFooters, sections, activeSectionIdx,
+                isFirstPageOfSection, pageIsEven, evenAndOddGlobal, footerHtml);
+            // Rebuild the PAGE field placeholder on the picked footer.
+            var pf = new Regex(@"(<(?:span|p)[^>]*>)\s*\d+\s*(</(?:span|p)>)");
+            var perPageFooterTemplate = pf.Replace(perPageFooter, "$1<!--PAGE_NUM-->$2", 1);
+            perPageFooterTemplate = pf.Replace(perPageFooterTemplate, "$1<!--NUM_PAGES-->$2", 1);
+            sb.Append(perPageFooterTemplate
                 .Replace("<!--PAGE_NUM-->", pageNumStr)
                 .Replace("<!--NUM_PAGES-->", pageList.Count.ToString()));
             sb.AppendLine("</div>");
@@ -1451,6 +1481,92 @@ public partial class WordHandler
         if (inMultiColumn) sb.AppendLine("</div>");
         if (dropCapWrapRemaining > 0) sb.Append("</div>");
         CloseAllLists(sb, listStack, ref currentListType, ref pendingLiClose);
+    }
+
+    /// <summary>
+    /// #3: per-section header/footer bundle. Missing types fall back to
+    /// the default variant at lookup time; missing default returns null
+    /// so the legacy fallback can kick in.
+    /// </summary>
+    private record HeaderFooterBundle(string? First, string? Default, string? Even);
+
+    /// <summary>
+    /// #3: walk each section's HeaderReference or FooterReference elements,
+    /// resolve to the underlying part, pre-render to HTML, and bucket by
+    /// type. Returns a dict keyed by section index.
+    /// </summary>
+    private Dictionary<int, HeaderFooterBundle> BuildSectionHfBundles(
+        List<SectionProperties> sections, bool isHeader)
+    {
+        var result = new Dictionary<int, HeaderFooterBundle>();
+        var mainPart = _doc.MainDocumentPart;
+        if (mainPart == null) return result;
+        for (int i = 0; i < sections.Count; i++)
+        {
+            string? first = null, def = null, even = null;
+            var refs = isHeader
+                ? sections[i].Elements<HeaderReference>().Cast<OpenXmlElement>()
+                : sections[i].Elements<FooterReference>().Cast<OpenXmlElement>();
+            foreach (var @ref in refs)
+            {
+                var rId = @ref.GetAttributes().FirstOrDefault(a => a.LocalName == "id").Value;
+                var typeAttr = @ref.GetAttributes().FirstOrDefault(a => a.LocalName == "type").Value;
+                if (string.IsNullOrEmpty(rId)) continue;
+                string? html = null;
+                try
+                {
+                    if (isHeader && mainPart.GetPartById(rId) is HeaderPart hp && hp.Header != null
+                        && HeaderFooterHasContent(hp.Header))
+                    {
+                        var sb = new StringBuilder();
+                        sb.Append("<div class=\"doc-header\">");
+                        RenderHeaderFooterBody(sb, hp.Header);
+                        sb.Append("</div>");
+                        html = sb.ToString();
+                    }
+                    else if (!isHeader && mainPart.GetPartById(rId) is FooterPart fp && fp.Footer != null
+                        && HeaderFooterHasContent(fp.Footer))
+                    {
+                        var sb = new StringBuilder();
+                        sb.Append("<div class=\"doc-footer\">");
+                        RenderHeaderFooterBody(sb, fp.Footer);
+                        sb.Append("</div>");
+                        html = sb.ToString();
+                    }
+                }
+                catch { /* part missing; skip */ }
+                if (html == null) continue;
+                switch (typeAttr)
+                {
+                    case "first": first = html; break;
+                    case "even":  even = html; break;
+                    default:      def = html; break;
+                }
+            }
+            result[i] = new HeaderFooterBundle(first, def, even);
+        }
+        return result;
+    }
+
+    /// <summary>#3: pick the right header/footer variant for a given page.</summary>
+    private static string PickHeaderFooter(
+        Dictionary<int, HeaderFooterBundle> bundles,
+        List<SectionProperties> sections,
+        int sectionIdx,
+        bool isFirstPageOfSection,
+        bool pageIsEven,
+        bool evenAndOddGlobal,
+        string fallbackHtml)
+    {
+        if (!bundles.TryGetValue(sectionIdx, out var bundle))
+            return fallbackHtml;
+        var sectHasTitlePg = sectionIdx >= 0 && sectionIdx < sections.Count
+            && sections[sectionIdx].GetFirstChild<TitlePage>() != null;
+        if (isFirstPageOfSection && sectHasTitlePg && bundle.First != null)
+            return bundle.First;
+        if (evenAndOddGlobal && pageIsEven && bundle.Even != null)
+            return bundle.Even;
+        return bundle.Default ?? fallbackHtml;
     }
 
     /// <summary>
