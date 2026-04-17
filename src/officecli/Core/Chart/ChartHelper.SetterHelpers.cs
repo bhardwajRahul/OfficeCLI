@@ -302,9 +302,31 @@ internal static partial class ChartHelper
                 break;
 
             case "trendline":
-                ser.RemoveAllChildren<C.Trendline>();
-                if (!value.Equals("none", StringComparison.OrdinalIgnoreCase))
-                    InsertSeriesChildInOrder(ser, BuildTrendline(value));
+                // CL20: `Set trendline=X` APPENDS a trendline (Excel allows
+                // multiple trendlines per series). Pass `none` to clear.
+                // If the requested trendline type already exists on the
+                // series, replace it in place so repeated identical sets
+                // stay idempotent; otherwise append a new one.
+                if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                {
+                    ser.RemoveAllChildren<C.Trendline>();
+                }
+                else
+                {
+                    var newTl = BuildTrendline(value);
+                    var newType = newTl.GetFirstChild<C.TrendlineType>()?.Val?.Value;
+                    var dupeTl = ser.Elements<C.Trendline>()
+                        .FirstOrDefault(t => t.GetFirstChild<C.TrendlineType>()?.Val?.Value == newType);
+                    if (dupeTl != null)
+                    {
+                        dupeTl.InsertAfterSelf(newTl);
+                        dupeTl.Remove();
+                    }
+                    else
+                    {
+                        InsertSeriesChildInOrder(ser, newTl);
+                    }
+                }
                 break;
 
             case "marker":
