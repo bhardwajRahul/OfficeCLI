@@ -2363,10 +2363,32 @@ public partial class ExcelHandler
                 }
 
                 // Position via TwoCellAnchor (shared by both standard and extended charts)
-                var fromCol = properties.TryGetValue("x", out var xStr) ? ParseHelpers.SafeParseInt(xStr, "x") : 0;
-                var fromRow = properties.TryGetValue("y", out var yStr) ? ParseHelpers.SafeParseInt(yStr, "y") : 0;
-                var toCol = properties.TryGetValue("width", out var wStr) ? fromCol + ParseHelpers.SafeParseInt(wStr, "width") : fromCol + 8;
-                var toRow = properties.TryGetValue("height", out var hStr) ? fromRow + ParseHelpers.SafeParseInt(hStr, "height") : fromRow + 15;
+                // CONSISTENCY(ole-width-units): accept `anchor=D2:J18` as a cell
+                // range (same grammar as OLE, shape, picture). When both
+                // `anchor=<range>` and `x/y/width/height` are supplied, anchor
+                // wins with a warning — matches shape/picture/OLE convention.
+                int fromCol, fromRow, toCol, toRow;
+                if (properties.TryGetValue("anchor", out var chartAnchorStr) && !string.IsNullOrWhiteSpace(chartAnchorStr))
+                {
+                    if (properties.ContainsKey("width") || properties.ContainsKey("height")
+                        || properties.ContainsKey("x") || properties.ContainsKey("y"))
+                        Console.Error.WriteLine(
+                            "Warning: 'x'/'y'/'width'/'height' are ignored when 'anchor' is provided (anchor defines the full rectangle).");
+                    if (!TryParseCellRangeAnchor(chartAnchorStr, out var cxFrom, out var cyFrom, out var cxTo, out var cyTo))
+                        throw new ArgumentException($"Invalid anchor: '{chartAnchorStr}'. Expected e.g. 'D2' or 'D2:J18'.");
+                    fromCol = cxFrom;
+                    fromRow = cyFrom;
+                    if (cxTo < 0) { cxTo = fromCol + 8; cyTo = fromRow + 15; }
+                    toCol = cxTo;
+                    toRow = cyTo;
+                }
+                else
+                {
+                    fromCol = properties.TryGetValue("x", out var xStr) ? ParseHelpers.SafeParseInt(xStr, "x") : 0;
+                    fromRow = properties.TryGetValue("y", out var yStr) ? ParseHelpers.SafeParseInt(yStr, "y") : 0;
+                    toCol = properties.TryGetValue("width", out var wStr) ? fromCol + ParseHelpers.SafeParseInt(wStr, "width") : fromCol + 8;
+                    toRow = properties.TryGetValue("height", out var hStr) ? fromRow + ParseHelpers.SafeParseInt(hStr, "height") : fromRow + 15;
+                }
 
                 // Extended chart types (cx:chart) — funnel, treemap, sunburst, boxWhisker, histogram
                 if (ChartExBuilder.IsExtendedChartType(chartType))
