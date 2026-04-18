@@ -57,7 +57,7 @@ static partial class CommandBuilder
 
     private static Command BuildCheckCommand(Option<bool> jsonOption)
     {
-        var checkFileArg = new Argument<FileInfo>("file") { Description = "Office document path (.pptx)" };
+        var checkFileArg = new Argument<FileInfo>("file") { Description = "Office document path (.pptx, .xlsx)" };
         var checkCommand = new Command("check", "Scan document for layout issues (text overflow, etc.)");
         checkCommand.Add(checkFileArg);
         checkCommand.Add(jsonOption);
@@ -65,27 +65,36 @@ static partial class CommandBuilder
         {
             var file = result.GetValue(checkFileArg)!;
             var ext = file.Extension.ToLowerInvariant();
-            if (ext != ".pptx")
-                throw new OfficeCli.Core.CliException("The 'check' command currently supports .pptx files only. Provide a .pptx file path.");
+            if (ext != ".pptx" && ext != ".xlsx")
+                throw new OfficeCli.Core.CliException("The 'check' command currently supports .pptx and .xlsx files only.");
 
             using var handler = DocumentHandlerFactory.Open(file.FullName, editable: false);
-            var pptHandler = handler as OfficeCli.Handlers.PowerPointHandler
-                ?? throw new OfficeCli.Core.CliException("Failed to open file as PowerPoint document.");
-
             var issues = new List<(string Path, string Message)>();
-            var root = pptHandler.Get("/");
-            int slideCount = root?.Children?.Count ?? 0;
-            for (int s = 1; s <= slideCount; s++)
+
+            if (ext == ".pptx")
             {
-                var slideNode = pptHandler.Get($"/slide[{s}]");
-                int shapeCount = slideNode?.Children?.Count ?? 0;
-                for (int sh = 1; sh <= shapeCount; sh++)
+                var pptHandler = handler as OfficeCli.Handlers.PowerPointHandler
+                    ?? throw new OfficeCli.Core.CliException("Failed to open file as PowerPoint document.");
+                var root = pptHandler.Get("/");
+                int slideCount = root?.Children?.Count ?? 0;
+                for (int s = 1; s <= slideCount; s++)
                 {
-                    var shapePath = $"/slide[{s}]/shape[{sh}]";
-                    var warning = pptHandler.CheckShapeTextOverflow(shapePath);
-                    if (warning != null)
-                        issues.Add((shapePath, warning));
+                    var slideNode = pptHandler.Get($"/slide[{s}]");
+                    int shapeCount = slideNode?.Children?.Count ?? 0;
+                    for (int sh = 1; sh <= shapeCount; sh++)
+                    {
+                        var shapePath = $"/slide[{s}]/shape[{sh}]";
+                        var warning = pptHandler.CheckShapeTextOverflow(shapePath);
+                        if (warning != null)
+                            issues.Add((shapePath, warning));
+                    }
                 }
+            }
+            else // .xlsx
+            {
+                var xlHandler = handler as OfficeCli.Handlers.ExcelHandler
+                    ?? throw new OfficeCli.Core.CliException("Failed to open file as Excel document.");
+                issues.AddRange(xlHandler.CheckAllCellOverflow());
             }
 
             if (json)
