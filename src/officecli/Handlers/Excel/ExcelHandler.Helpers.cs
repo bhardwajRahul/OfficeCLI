@@ -1613,7 +1613,7 @@ public partial class ExcelHandler
                 node.Format["font.underline"] = u.Val?.InnerText == "double" ? "double" : "single";
             var clr = rProps.Elements<Color>().FirstOrDefault();
             if (clr?.Rgb?.HasValue == true)
-                node.Format["font.color"] = ParseHelpers.FormatHexColor(clr.Rgb.Value);
+                node.Format["font.color"] = ParseHelpers.FormatHexColor(clr.Rgb.Value!);
             var sz = rProps.Elements<FontSize>().FirstOrDefault();
             if (sz?.Val?.HasValue == true && sz.Val.Value != 9.0)
                 node.Format["font.size"] = $"{sz.Val.Value:0.##}pt";
