@@ -783,6 +783,42 @@ public partial class ExcelHandler
             return shpUnsupported;
         }
 
+        // Handle /SheetName/slicer[N] — caption/style/columnCount/rowHeight/name
+        var slicerSetMatch = Regex.Match(cellRef, @"^slicer\[(\d+)\]$", RegexOptions.IgnoreCase);
+        if (slicerSetMatch.Success)
+        {
+            var slIdx = int.Parse(slicerSetMatch.Groups[1].Value);
+            if (!TryFindSlicerByIndex(worksheet, slIdx, out var slicer, out _) || slicer == null)
+                throw new ArgumentException($"slicer[{slIdx}] not found on sheet");
+
+            var slicersPart = worksheet.GetPartsOfType<SlicersPart>().FirstOrDefault();
+            var slUnsupported = new List<string>();
+            foreach (var (key, value) in properties)
+            {
+                switch (key.ToLowerInvariant())
+                {
+                    case "caption": slicer.Caption = value; break;
+                    case "style": slicer.Style = value; break;
+                    case "name": slicer.Name = value; break;
+                    case "rowheight":
+                        if (uint.TryParse(value, out var rh)) slicer.RowHeight = rh;
+                        else slUnsupported.Add(key);
+                        break;
+                    case "columncount":
+                        if (uint.TryParse(value, out var cc) && cc >= 1 && cc <= 20000)
+                            slicer.ColumnCount = cc;
+                        else slUnsupported.Add(key);
+                        break;
+                    default:
+                        slUnsupported.Add(key);
+                        break;
+                }
+            }
+            if (slicersPart?.Slicers != null) slicersPart.Slicers.Save(slicersPart);
+            SaveWorksheet(worksheet);
+            return slUnsupported;
+        }
+
         // Handle /SheetName/table[N]
         var tableSetMatch = Regex.Match(cellRef, @"^table\[(\d+)\]$", RegexOptions.IgnoreCase);
         if (tableSetMatch.Success)
