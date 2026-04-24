@@ -1,0 +1,160 @@
+{
+  "$schema": "../_schema.json",
+  "format": "pptx",
+  "element": "shape",
+  "operations": {
+    "add": true,
+    "set": true,
+    "get": true,
+    "query": true,
+    "remove": true
+  },
+  "paths": {
+    "stable": ["/slide[N]/shape[@id=ID]"],
+    "positional": ["/slide[N]/shape[N]"]
+  },
+  "properties": {
+    "text": {
+      "type": "string",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop text=\"Hello\""],
+      "readback": "plain text content of the shape",
+      "enforcement": "strict"
+    },
+    "fill": {
+      "type": "color",
+      "aliases": ["background"],
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": [
+        "--prop fill=FF0000",
+        "--prop fill=#FF0000",
+        "--prop fill=red",
+        "--prop fill=accent1"
+      ],
+      "readback": "#RRGGBB (uppercase) or scheme color name (e.g. accent1)",
+      "enforcement": "strict"
+    },
+    "color": {
+      "type": "color",
+      "description": "text color",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop color=0000FF"],
+      "readback": "#RRGGBB (uppercase)",
+      "enforcement": "strict"
+    },
+    "size": {
+      "type": "font-size",
+      "description": "font size",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop size=14", "--prop size=14pt", "--prop size=10.5pt"],
+      "readback": "unit-qualified string, e.g. \"14pt\"",
+      "enforcement": "strict"
+    },
+    "bold": {
+      "type": "bool",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop bold=true"],
+      "readback": "true | false",
+      "enforcement": "strict"
+    },
+    "italic": {
+      "type": "bool",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop italic=true"],
+      "readback": "true | false",
+      "enforcement": "strict"
+    },
+    "align": {
+      "type": "enum",
+      "values": ["left", "center", "right", "justify"],
+      "description": "text horizontal alignment",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop align=center"],
+      "readback": "one of: left | center | right | justify",
+      "enforcement": "strict"
+    },
+    "x": {
+      "type": "length",
+      "description": "horizontal position of shape",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop x=2cm", "--prop x=1in", "--prop x=72pt"],
+      "readback": "length in cm (e.g. \"2cm\")",
+      "enforcement": "strict"
+    },
+    "y": {
+      "type": "length",
+      "description": "vertical position of shape",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop y=3cm"],
+      "readback": "length in cm (e.g. \"3cm\")",
+      "enforcement": "strict"
+    },
+    "width": {
+      "type": "length",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop width=5cm"],
+      "readback": "length in cm",
+      "enforcement": "strict"
+    },
+    "height": {
+      "type": "length",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop height=3cm"],
+      "readback": "length in cm",
+      "enforcement": "strict"
+    },
+    "rotation": {
+      "type": "number",
+      "description": "rotation in degrees",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop rotation=45"],
+      "readback": "degrees as number (e.g. 45)",
+      "enforcement": "strict"
+    },
+    "opacity": {
+      "type": "number",
+      "description": "fill opacity (0.0 - 1.0). Requires a fill to attach to — opacity alone (without fill/gradient/pattern) has no effect in OOXML.",
+      "requires": ["fill"],
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop opacity=0.5 --prop fill=FF0000"],
+      "readback": "number in [0, 1]",
+      "enforcement": "strict"
+    },
+    "name": {
+      "type": "string",
+      "description": "shape name (identifier, not display text)",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop name=MyShape"],
+      "readback": "plain string",
+      "enforcement": "strict"
+    }
+  }
+}

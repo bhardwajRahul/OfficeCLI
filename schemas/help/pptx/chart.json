@@ -1,0 +1,121 @@
+{
+  "$schema": "../_schema.json",
+  "format": "pptx",
+  "element": "chart",
+  "operations": {
+    "add": true,
+    "set": true,
+    "get": true,
+    "query": true,
+    "remove": true
+  },
+  "paths": {
+    "stable":     ["/slide[N]/chart[@id=ID]"],
+    "positional": ["/slide[N]/chart[N]"]
+  },
+  "note": "source of truth: Core/Chart/ChartHelper.cs ParseChartType() for the classic (c:chart) family, Core/Chart/ChartExBuilder.cs IsExtendedChartType() for the extended (cx:chart) family. Adding a new chartType value MUST update both the handler and this file in the same PR — contract tests enforce equivalence.",
+  "properties": {
+    "chartType": {
+      "type": "enum",
+      "values": [
+        "bar", "column", "line", "pie", "doughnut", "area",
+        "scatter", "bubble", "radar", "stock", "combo",
+        "waterfall", "funnel", "treemap", "sunburst",
+        "boxWhisker", "histogram", "pareto"
+      ],
+      "modifiers": {
+        "3d":             { "suffix": "3d", "example": "column3d",         "appliesWhen": { "chartType": ["bar","column","line","pie","area"] } },
+        "stacked":        { "prefix": "stacked", "example": "stackedBar",  "appliesWhen": { "chartType": ["bar","column","line","area"] } },
+        "percentStacked": { "prefix": "percentStacked", "example": "percentStackedBar", "appliesWhen": { "chartType": ["bar","column","line","area"] } }
+      },
+      "aliases": { "col": "column", "donut": "doughnut", "xy": "scatter", "spider": "radar", "ohlc": "stock", "wf": "waterfall" },
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": [
+        "--prop chartType=column",
+        "--prop chartType=stackedBar",
+        "--prop chartType=percentStackedColumn",
+        "--prop chartType=column3d",
+        "--prop chartType=waterfall"
+      ],
+      "readback": "normalized chartType string without modifiers (modifiers surface as separate flags in later iterations)",
+      "enforcement": "strict"
+    },
+    "title": {
+      "type": "string",
+      "add": true,
+      "set": true,
+      "get": true,
+      "examples": ["--prop title=\"2024 Sales\""],
+      "readback": "plain text of chart title",
+      "enforcement": "strict"
+    },
+    "x":      { "type": "length", "add": true, "set": true, "get": true, "examples": ["--prop x=2cm"], "readback": "length in cm", "enforcement": "strict" },
+    "y":      { "type": "length", "add": true, "set": true, "get": true, "examples": ["--prop y=3cm"], "readback": "length in cm", "enforcement": "strict" },
+    "width":  { "type": "length", "add": true, "set": true, "get": true, "examples": ["--prop width=18cm"], "readback": "length in cm", "enforcement": "strict" },
+    "height": { "type": "length", "add": true, "set": true, "get": true, "examples": ["--prop height=10cm"], "readback": "length in cm", "enforcement": "strict" },
+    "categories": {
+      "type": "string",
+      "description": "comma-separated category labels, OR a cell range reference (e.g. Sheet1!A2:A5)",
+      "add": true,
+      "set": true,
+      "get": false,
+      "examples": [
+        "--prop categories=\"Q1,Q2,Q3,Q4\"",
+        "--prop categories=\"Sheet1!$A$2:$A$5\""
+      ],
+      "enforcement": "strict"
+    },
+    "data": {
+      "type": "string",
+      "description": "legacy compact series syntax. Prefer per-series keys (see chart-series). Format: 'Name:1,2,3' or 'Name1:1,2,3;Name2:4,5,6'",
+      "add": true,
+      "set": false,
+      "get": false,
+      "examples": ["--prop data=\"Sales:10,20,30;Cost:5,8,12\""],
+      "enforcement": "strict"
+    },
+    "colors": {
+      "type": "string",
+      "description": "comma-separated series fill colors, positional (1st color → series 1). Per-series dotted keys (series1.color=...) override positions.",
+      "add": true,
+      "set": false,
+      "get": false,
+      "examples": ["--prop colors=\"4472C4,ED7D31,A5A5A5\""],
+      "enforcement": "strict"
+    },
+    "holeSize": {
+      "type": "number",
+      "description": "doughnut hole size (10-90)",
+      "appliesWhen": { "chartType": ["doughnut"] },
+      "set": true,
+      "get": true,
+      "examples": ["--prop holeSize=50"],
+      "enforcement": "strict"
+    },
+    "smooth": {
+      "type": "bool",
+      "description": "smooth line rendering",
+      "appliesWhen": { "chartType": ["line", "scatter"] },
+      "set": true,
+      "get": true,
+      "examples": ["--prop smooth=true"],
+      "enforcement": "strict"
+    }
+  },
+  "children": [
+    { "element": "chart-title",    "pathSegment": "title",    "cardinality": "0..1" },
+    { "element": "chart-legend",   "pathSegment": "legend",   "cardinality": "0..1" },
+    { "element": "chart-plotArea", "pathSegment": "plotArea", "cardinality": "0..1" },
+    {
+      "element": "chart-axis",
+      "pathSegment": "axis",
+      "cardinality": "0..n",
+      "key": "role",
+      "keyValues": ["category", "value", "value2", "series"],
+      "appliesWhen": { "chartType": ["bar", "column", "line", "area", "scatter", "bubble", "radar", "stock", "combo"] }
+    },
+    { "element": "chart-series",   "pathSegment": "series",   "cardinality": "1..n" }
+  ]
+}

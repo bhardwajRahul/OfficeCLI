@@ -1,0 +1,62 @@
+{
+  "$schema": "../_schema.json",
+  "format": "docx",
+  "element": "run",
+  "parent": "paragraph",
+  "operations": {
+    "add": true,
+    "set": true,
+    "get": true,
+    "remove": true
+  },
+  "paths": {
+    "stable":     ["/body/p[@paraId=ID]/r[N]"],
+    "positional": ["/body/p[N]/r[N]", "/p[N]/r[N]"]
+  },
+  "properties": {
+    "text": {
+      "type": "string",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop text=\"run content\""],
+      "readback": "plain text of run",
+      "enforcement": "strict"
+    },
+    "bold": {
+      "type": "bool",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop bold=true"],
+      "readback": "true | false",
+      "enforcement": "strict"
+    },
+    "italic": {
+      "type": "bool",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop italic=true"],
+      "readback": "true | false",
+      "enforcement": "strict"
+    },
+    "font": {
+      "type": "string",
+      "description": "font family (e.g. \"Times New Roman\", \"SimSun\")",
+      "aliases": ["fontname", "fontFamily"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font=\"Times New Roman\""],
+      "enforcement": "strict"
+    },
+    "size": {
+      "type": "font-size",
+      "aliases": ["fontsize"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop size=14", "--prop size=14pt", "--prop size=10.5pt"],
+      "readback": "unit-qualified, e.g. \"14pt\"",
+      "enforcement": "strict"
+    },
+    "color": {
+      "type": "color",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop color=FF0000", "--prop color=#FF0000", "--prop color=red"],
+      "readback": "#RRGGBB uppercase",
+      "enforcement": "strict"
+    }
+  }
+}

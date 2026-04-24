@@ -1,0 +1,80 @@
+{
+  "$schema": "../_schema.json",
+  "format": "docx",
+  "element": "paragraph",
+  "operations": {
+    "add": true,
+    "set": true,
+    "get": true,
+    "query": true,
+    "remove": true
+  },
+  "paths": {
+    "stable":     ["/body/p[@paraId=ID]"],
+    "positional": ["/body/p[N]", "/p[N]"]
+  },
+  "note": "Canonical keys per CLAUDE.md: spaceBefore/spaceAfter/lineSpacing/alignment. Legacy aliases (spacebefore, linespacing, halign) are still accepted on Add/Set but Get normalizes to canonical.",
+  "properties": {
+    "text": {
+      "type": "string",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop text=\"Hello world\""],
+      "readback": "plain text content of paragraph",
+      "enforcement": "strict"
+    },
+    "alignment": {
+      "type": "enum",
+      "values": ["left", "center", "right", "justify", "both", "distribute"],
+      "aliases": ["halign", "align"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop alignment=center"],
+      "readback": "one of values",
+      "enforcement": "strict"
+    },
+    "style": {
+      "type": "string",
+      "description": "paragraph styleId (e.g. Heading1, Normal, Quote). Must reference an existing style or one of the built-in style aliases.",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop style=Heading1"],
+      "readback": "styleId as stored on the paragraph",
+      "enforcement": "strict"
+    },
+    "spaceBefore": {
+      "type": "length",
+      "aliases": ["spacebefore"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop spaceBefore=12pt"],
+      "readback": "unit-qualified, e.g. \"12pt\"",
+      "enforcement": "strict"
+    },
+    "spaceAfter": {
+      "type": "length",
+      "aliases": ["spaceafter"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop spaceAfter=6pt"],
+      "readback": "unit-qualified, e.g. \"6pt\"",
+      "enforcement": "strict"
+    },
+    "lineSpacing": {
+      "type": "string",
+      "description": "multiplier (e.g. 1.5x, 150%) or fixed length (e.g. 18pt)",
+      "aliases": ["linespacing"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop lineSpacing=1.5x", "--prop lineSpacing=18pt"],
+      "readback": "\"<N>x\" for multiplier or \"<N>pt\" for fixed",
+      "enforcement": "strict"
+    },
+    "indent": {
+      "type": "length",
+      "description": "left indentation. Routed through SpacingConverter — accepts twips int or unit-qualified (2cm/0.5in/24pt). Aliases: leftindent/leftIndent. Get canonical key is 'leftIndent'.",
+      "aliases": ["leftindent", "leftIndent"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop indent=2cm"],
+      "readback": "under canonical key 'leftIndent'",
+      "enforcement": "report"
+    }
+  },
+  "children": [
+    { "element": "run", "pathSegment": "r", "cardinality": "0..n" }
+  ]
+}

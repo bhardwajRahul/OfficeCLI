@@ -6,10 +6,6 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using OfficeCli.Core;
-using A = DocumentFormat.OpenXml.Drawing;
-using C = DocumentFormat.OpenXml.Drawing.Charts;
-using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
-using M = DocumentFormat.OpenXml.Math;
 
 namespace OfficeCli.Handlers;
 
@@ -106,10 +102,45 @@ public partial class WordHandler
                 cols.Space = ParseTwips(parts[1].Trim()).ToString();
             sectPr.AppendChild(cols);
         }
-        if (properties.TryGetValue("columns.space", out var colSpace))
+        if (properties.TryGetValue("columns.space", out var colSpace)
+            || properties.TryGetValue("columnSpace", out colSpace))
         {
             var cols = sectPr.GetFirstChild<Columns>() ?? sectPr.AppendChild(new Columns());
             cols.Space = ParseTwips(colSpace).ToString();
+        }
+
+        // Per-section margin overrides — mutate the PageMargin child of the
+        // new sectPr (not the body sectPr). Margins use Int32Value for Top/
+        // Bottom and UInt32Value for Left/Right to match the schema.
+        var pm = sectPr.GetFirstChild<PageMargin>() ?? sectPr.AppendChild(new PageMargin());
+        if (properties.TryGetValue("marginTop", out var mTop) || properties.TryGetValue("margintop", out mTop))
+            pm.Top = (int)ParseTwips(mTop);
+        if (properties.TryGetValue("marginBottom", out var mBot) || properties.TryGetValue("marginbottom", out mBot))
+            pm.Bottom = (int)ParseTwips(mBot);
+        if (properties.TryGetValue("marginLeft", out var mLeft) || properties.TryGetValue("marginleft", out mLeft))
+            pm.Left = ParseTwips(mLeft);
+        if (properties.TryGetValue("marginRight", out var mRight) || properties.TryGetValue("marginright", out mRight))
+            pm.Right = ParseTwips(mRight);
+
+        // Line numbering — mirrors Set parser (WordHandler.Set.cs ~L608).
+        if (properties.TryGetValue("lineNumbers", out var lnVal) || properties.TryGetValue("linenumbers", out lnVal))
+        {
+            var restart = lnVal.ToLowerInvariant() switch
+            {
+                "continuous" => LineNumberRestartValues.Continuous,
+                "restartpage" or "page" => LineNumberRestartValues.NewPage,
+                "restartsection" or "section" => LineNumberRestartValues.NewSection,
+                _ => throw new ArgumentException(
+                    $"Invalid lineNumbers value: '{lnVal}'. Valid values: continuous, restartPage, restartSection.")
+            };
+            var lnType = new LineNumberType { Restart = restart };
+            if (properties.TryGetValue("lineNumberCountBy", out var lnBy)
+                || properties.TryGetValue("linenumbercountby", out lnBy))
+            {
+                var by = int.Parse(lnBy);
+                if (by > 1) lnType.CountBy = (short)by;
+            }
+            sectPr.AppendChild(lnType);
         }
 
         sectPProps.AppendChild(sectPr);

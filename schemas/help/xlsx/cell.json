@@ -1,0 +1,113 @@
+{
+  "$schema": "../_schema.json",
+  "format": "xlsx",
+  "element": "cell",
+  "parent": "sheet",
+  "operations": {
+    "add": true,
+    "set": true,
+    "get": true,
+    "query": true,
+    "remove": true
+  },
+  "paths": {
+    "stable":     ["/<sheetName>/<A1Ref>"],
+    "positional": ["/Sheet1/A1", "/Sheet1/B2:C3"]
+  },
+  "note": "Canonical keys per CLAUDE.md: numberformat (not `format`), alignment.horizontal / alignment.vertical / alignment.wrapText. Font properties surface in Get as font.bold / font.italic / font.name / font.size / font.color (readback namespace). Add/Set accept both the short forms (bold, italic, font, size, color) and the font.* forms.",
+  "properties": {
+    "value": {
+      "type": "string",
+      "description": "literal cell value — string, number, or date. Numeric strings are stored as numbers. Readback lives in DocumentNode.Text, not Format[].",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop value=\"Hello\"", "--prop value=42", "--prop value=3.14"],
+      "readback": "plain string in DocumentNode.Text",
+      "enforcement": "report"
+    },
+    "formula": {
+      "type": "string",
+      "description": "cell formula, without leading =",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop formula=\"SUM(A1:A10)\""],
+      "readback": "formula text without leading =",
+      "enforcement": "report"
+    },
+    "numberformat": {
+      "type": "string",
+      "description": "Excel number format string",
+      "aliases": ["format", "numfmt"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop numberformat=\"#,##0.00\"", "--prop numberformat=yyyy-mm-dd"],
+      "readback": "format string as stored",
+      "enforcement": "report"
+    },
+    "font.bold": {
+      "type": "bool",
+      "aliases": ["bold"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop bold=true"],
+      "enforcement": "strict"
+    },
+    "font.italic": {
+      "type": "bool",
+      "aliases": ["italic"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop italic=true"],
+      "enforcement": "strict"
+    },
+    "font.name": {
+      "type": "string",
+      "aliases": ["font", "fontname"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font=\"Calibri\""],
+      "enforcement": "strict"
+    },
+    "font.size": {
+      "type": "font-size",
+      "aliases": ["size", "fontsize"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop size=11pt"],
+      "readback": "unit-qualified, e.g. \"11pt\"",
+      "enforcement": "strict"
+    },
+    "font.color": {
+      "type": "color",
+      "aliases": ["color"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop color=FF0000"],
+      "readback": "#RRGGBB uppercase",
+      "enforcement": "report"
+    },
+    "fill": {
+      "type": "color",
+      "description": "cell background fill color",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop fill=FFFF00"],
+      "readback": "#RRGGBB uppercase",
+      "enforcement": "report"
+    },
+    "alignment.horizontal": {
+      "type": "enum",
+      "values": ["left", "center", "right", "justify", "fill", "distributed"],
+      "aliases": ["halign"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop alignment.horizontal=center"],
+      "enforcement": "report"
+    },
+    "alignment.vertical": {
+      "type": "enum",
+      "values": ["top", "center", "bottom"],
+      "aliases": ["valign"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop alignment.vertical=center"],
+      "enforcement": "report"
+    },
+    "alignment.wrapText": {
+      "type": "bool",
+      "aliases": ["wrap", "wrapText"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop alignment.wrapText=true"],
+      "enforcement": "report"
+    }
+  }
+}
