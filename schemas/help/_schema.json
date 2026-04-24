@@ -26,6 +26,10 @@
       "type": "string",
       "description": "free-form clarification that does not fit into structured fields (e.g. schema source-of-truth pointer, invariants, caveats)"
     },
+    "container": {
+      "type": "boolean",
+      "description": "set to true for read-only root/container entities (presentation, workbook, document, theme, slidemaster, etc.) that are navigated through but never created or mutated. Contract tests skip Add/Set assertions for containers."
+    },
     "operations": {
       "type": "object",
       "description": "which top-level operations accept this element",
