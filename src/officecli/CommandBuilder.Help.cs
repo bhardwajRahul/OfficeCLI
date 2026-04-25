@@ -117,6 +117,12 @@ static partial class CommandBuilder
             var third = result.GetValue(thirdArg);
 
             // Disambiguate middle arg: is it a verb or an element?
+            // Normalize empty/whitespace tokens to null so `help docx ''` routes
+            // to LoadSchema (→ proper "unknown element" error) rather than silently
+            // falling into the "list all elements" branch. CONSISTENCY(empty-arg).
+            if (string.IsNullOrWhiteSpace(second)) second = null;
+            if (string.IsNullOrWhiteSpace(third)) third = null;
+
             string? verb = null;
             string? element = null;
             if (second != null)
@@ -134,9 +140,20 @@ static partial class CommandBuilder
                         verb = second;
                         element = third;
                     }
-                    // else: format is a HelpVerb, second is a format/unknown, third
-                    // is an element — fall through with verb=null, element=null so
-                    // Case 1b shows SCL command help (ignores the trailing tokens).
+                    else if (SchemaHelpLoader.IsKnownFormat(format!))
+                    {
+                        // format is a real schema format AND third is provided, but
+                        // second isn't a verb — surface the error instead of
+                        // silently falling through to Case 2 (which would list all
+                        // elements, ignoring user input).
+                        Console.Error.WriteLine(
+                            $"error: unknown verb '{second}'. Valid: {string.Join(", ", HelpVerbs)}.");
+                        return 1;
+                    }
+                    // else: format is a HelpVerb (CRUD-verb-as-format from the
+                    // `<verb> --help <fmt> <element>` rewrite), second is the format
+                    // token, third is the element — fall through with verb=null,
+                    // element=null so Case 1b shows SCL command help.
                 }
                 else if (HelpVerbs.Contains(second, StringComparer.OrdinalIgnoreCase))
                 {
