@@ -76,7 +76,9 @@ public static class McpServer
                         "tools/list" => HandleToolsList(id),
                         "tools/call" => HandleToolsCall(id, root),
                         "ping" => WriteJson(w => { w.WriteStartObject(); Rpc(w, id); w.WriteStartObject("result"); w.WriteEndObject(); w.WriteEndObject(); }),
-                        _ => id.HasValue ? ErrorJson(id, -32601, $"Method not found: {method}") : null,
+                        // CONSISTENCY(mcp-error): truncate caller-supplied value to prevent
+                        // response amplification (echo arbitrary-length input back unchanged).
+                        _ => id.HasValue ? ErrorJson(id, -32601, $"Method not found: {OfficeCli.Help.SchemaHelpLoader.TruncateForError(method ?? "", 64)}") : null,
                     };
 
                     if (response != null)
@@ -450,7 +452,9 @@ public static class McpServer
                 }
             }
             default:
-                throw new ArgumentException($"Unknown tool: {name}");
+                // CONSISTENCY(mcp-error): truncate caller-supplied value to prevent
+                // response amplification (echo arbitrary-length input back unchanged).
+                throw new ArgumentException($"Unknown tool: {OfficeCli.Help.SchemaHelpLoader.TruncateForError(name, 64)}");
         }
     }
 
