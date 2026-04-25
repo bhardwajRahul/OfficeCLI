@@ -19,6 +19,10 @@ public partial class WordHandler
     partial void OnHtmlParagraphBegin(Paragraph para);
     partial void OnHtmlParagraphEnd(StringBuilder sb);
     partial void OnHtmlRenderText(StringBuilder sb, string text, RunProperties? rProps, string? runStyle, ref bool handled);
+    // Notify overlay that a <w:tab/> was just emitted as a visible `widthPt`
+    // wide spacer. Overlay must account for this width in its per-line budget
+    // since the browser lays it out inline and pushes subsequent text right.
+    partial void OnHtmlRenderTab(double widthPt);
 
     // ==================== Paragraph Content ====================
 
@@ -364,6 +368,7 @@ public partial class WordHandler
                             _ => "",
                         };
                         sb.Append($"<span style=\"display:inline-block;width:{widthPt:0.##}pt;{cssLeader}\"></span>");
+                        OnHtmlRenderTab(widthPt);
                     }
                     else
                     {
@@ -375,6 +380,7 @@ public partial class WordHandler
                         if (dts?.Val?.HasValue == true && dts.Val.Value > 0)
                             defTabPt = dts.Val.Value / 20.0;
                         sb.Append($"<span style=\"display:inline-block;width:{defTabPt:0.##}pt\"></span>");
+                        OnHtmlRenderTab(defTabPt);
                     }
                     _ctx.CurrentParagraphTabIndex++;
                 }
