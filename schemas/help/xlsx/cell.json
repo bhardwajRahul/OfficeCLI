@@ -143,6 +143,39 @@
       "add": true, "set": true, "get": false,
       "examples": ["--prop link=https://example.com --prop tooltip=\"Open in browser\""],
       "enforcement": "report"
+    },
+    "type": {
+      "type": "enum",
+      "values": ["string", "number", "boolean", "date", "richtext", "shared", "inline"],
+      "description": "force a cell type. Normally inferred from value/formula.",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop value=01234 --prop type=string"],
+      "readback": "type token",
+      "enforcement": "report"
+    },
+    "runs": {
+      "type": "string",
+      "description": "rich-text runs as JSON array (e.g. '[{\"text\":\"Hello\",\"bold\":true}]'). Used when type=richtext.",
+      "add": true, "set": false, "get": false,
+      "examples": ["--prop type=richtext --prop runs='[{\"text\":\"Bold\",\"bold\":true}]'"],
+      "readback": "n/a (decomposed into /run[N] subnodes)",
+      "enforcement": "report"
+    },
+    "clear": {
+      "type": "bool",
+      "description": "clear the cell value/formula before applying new content.",
+      "add": true, "set": true, "get": false,
+      "examples": ["--prop clear=true"],
+      "readback": "n/a",
+      "enforcement": "report"
+    },
+    "arrayformula": {
+      "type": "string",
+      "description": "dynamic-array formula spilled into ref range (without leading '=').",
+      "add": true, "set": true, "get": false,
+      "examples": ["--prop arrayformula=\"A1:A10*2\" --prop ref=B1:B10"],
+      "readback": "n/a",
+      "enforcement": "report"
     }
   }
 }

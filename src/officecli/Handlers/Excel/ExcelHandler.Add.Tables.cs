@@ -837,13 +837,22 @@ public partial class ExcelHandler
         table.AppendChild(new TableStyleInfo
         {
             Name = styleName,
-            ShowFirstColumn = properties.TryGetValue("showFirstColumn", out var sfc)
+            ShowFirstColumn = (properties.TryGetValue("showFirstColumn", out var sfc)
+                    || properties.TryGetValue("firstColumn", out sfc))
                 ? IsTruthy(sfc) : false,
-            ShowLastColumn = properties.TryGetValue("showLastColumn", out var slc)
+            ShowLastColumn = (properties.TryGetValue("showLastColumn", out var slc)
+                    || properties.TryGetValue("lastColumn", out slc))
                 ? IsTruthy(slc) : false,
-            ShowRowStripes = properties.TryGetValue("showBandedRows", out var sbr)
+            // Accept showBandedRows / showRowStripes / bandedRows as aliases.
+            // Set.Tables.cs already accepts the same set; mirror here.
+            ShowRowStripes = (properties.TryGetValue("showBandedRows", out var sbr)
+                    || properties.TryGetValue("showRowStripes", out sbr)
+                    || properties.TryGetValue("bandedRows", out sbr))
                 ? IsTruthy(sbr) : true,
-            ShowColumnStripes = properties.TryGetValue("showBandedColumns", out var sbc)
+            ShowColumnStripes = (properties.TryGetValue("showBandedColumns", out var sbc)
+                    || properties.TryGetValue("showColumnStripes", out sbc)
+                    || properties.TryGetValue("bandedColumns", out sbc)
+                    || properties.TryGetValue("bandedCols", out sbc))
                 ? IsTruthy(sbc) : false
         });
 

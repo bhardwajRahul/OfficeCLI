@@ -296,6 +296,11 @@ internal static class SchemaHelpLoader
     private static readonly string[] IndexedSubPropertyPrefixes =
     {
         "series", "datalabel", "point", "legendentry",
+        // autofilter per-column criteria keys: criteria0.equals,
+        // criteria3.gt, criteria12.contains, etc.
+        "criteria",
+        // table per-column override keys: columns.1.dxfId, etc.
+        "columns.",
     };
 
     /// <summary>
