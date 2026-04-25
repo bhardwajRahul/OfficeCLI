@@ -820,11 +820,11 @@ internal static partial class ChartHelper
 
     // ==================== Default Series Colors ====================
 
+    // CONSISTENCY(chart-default-palette): canonical source is
+    // OfficeDefaultThemeColors.DefaultChartSeriesPalette so the OOXML
+    // builder and the SVG preview renderer cannot drift apart.
     internal static readonly string[] DefaultSeriesColors =
-    {
-        "4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47",
-        "264478", "9B4A22", "636363", "BF8F00", "3A75A8", "4E8538"
-    };
+        OfficeDefaultThemeColors.DefaultChartSeriesPalette;
 
     // ==================== Series Color ====================
 

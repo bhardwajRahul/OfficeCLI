@@ -34,6 +34,22 @@ public static class OfficeDefaultThemeColors
     public const string FollowedHyperlink = "954F72";
 
     /// <summary>
+    /// Default chart series color rotation when no <c>ColorScheme</c> is
+    /// available. Slots 1-6 are the six accent colors; slots 7-12 are the
+    /// same accents with <c>lumMod=75000</c> applied (the darker tints
+    /// Office cycles through after exhausting the primary accents).
+    ///
+    /// Hex values are 6-char OOXML format (no leading <c>#</c>). Both the
+    /// OOXML chart Builder and the SVG preview Renderer derive from this
+    /// array — keep them aligned to avoid the chart-vs-preview drift.
+    /// </summary>
+    public static readonly string[] DefaultChartSeriesPalette =
+    {
+        Accent1, Accent2, Accent3, Accent4, Accent5, Accent6,
+        "264478", "9E480E", "636363", "997300", "255E91", "43682B",
+    };
+
+    /// <summary>
     /// Builds a name→hex dictionary covering the canonical scheme keys plus
     /// the common aliases (dk1/tx1/text1, bg1/lt1/background1, …) that Word
     /// and PowerPoint accept as <c>w:themeColor</c> / <c>a:schemeClr</c>
