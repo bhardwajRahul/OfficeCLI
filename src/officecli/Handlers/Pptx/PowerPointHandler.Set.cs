@@ -308,82 +308,15 @@ public partial class PowerPointHandler
 
         // Try notes path: /slide[N]/notes
         var notesSetMatch = Regex.Match(path, @"^/slide\[(\d+)\]/notes$");
-        if (notesSetMatch.Success)
-        {
-            var slideIdx = int.Parse(notesSetMatch.Groups[1].Value);
-            var slidePartsN = GetSlideParts().ToList();
-            if (slideIdx < 1 || slideIdx > slidePartsN.Count)
-                throw new ArgumentException($"Slide {slideIdx} not found (total: {slidePartsN.Count})");
-            var notesPart = EnsureNotesSlidePart(slidePartsN[slideIdx - 1]);
-            var unsupportedN = new List<string>();
-            foreach (var (key, value) in properties)
-            {
-                if (key.Equals("text", StringComparison.OrdinalIgnoreCase))
-                    SetNotesText(notesPart, value);
-                else
-                    unsupportedN.Add(key);
-            }
-            return unsupportedN;
-        }
+        if (notesSetMatch.Success) return SetNotesByPath(notesSetMatch, properties);
 
         // Try run-level path: /slide[N]/shape[M]/run[K]
         var runMatch = Regex.Match(path, @"^/slide\[(\d+)\]/shape\[(\d+)\]/run\[(\d+)\]$");
-        if (runMatch.Success)
-        {
-            var slideIdx = int.Parse(runMatch.Groups[1].Value);
-            var shapeIdx = int.Parse(runMatch.Groups[2].Value);
-            var runIdx = int.Parse(runMatch.Groups[3].Value);
-
-            var (slidePart, shape) = ResolveShape(slideIdx, shapeIdx);
-            var allRuns = GetAllRuns(shape);
-            if (runIdx < 1 || runIdx > allRuns.Count)
-                throw new ArgumentException($"Run {runIdx} not found (shape has {allRuns.Count} runs)");
-
-            var targetRun = allRuns[runIdx - 1];
-            var linkValRun = properties.GetValueOrDefault("link");
-            var tooltipValRun = properties.GetValueOrDefault("tooltip");
-            var runOnlyProps = properties
-                .Where(kv => !kv.Key.Equals("link", StringComparison.OrdinalIgnoreCase)
-                          && !kv.Key.Equals("tooltip", StringComparison.OrdinalIgnoreCase))
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
-            var unsupported = SetRunOrShapeProperties(runOnlyProps, new List<Drawing.Run> { targetRun }, shape, slidePart);
-            if (linkValRun != null) ApplyRunHyperlink(slidePart, targetRun, linkValRun, tooltipValRun);
-            GetSlide(slidePart).Save();
-            return unsupported;
-        }
+        if (runMatch.Success) return SetShapeRunByPath(runMatch, properties);
 
         // Try paragraph/run path: /slide[N]/shape[M]/paragraph[P]/run[K]
         var paraRunMatch = Regex.Match(path, @"^/slide\[(\d+)\]/shape\[(\d+)\]/paragraph\[(\d+)\]/run\[(\d+)\]$");
-        if (paraRunMatch.Success)
-        {
-            var slideIdx = int.Parse(paraRunMatch.Groups[1].Value);
-            var shapeIdx = int.Parse(paraRunMatch.Groups[2].Value);
-            var paraIdx = int.Parse(paraRunMatch.Groups[3].Value);
-            var runIdx = int.Parse(paraRunMatch.Groups[4].Value);
-
-            var (slidePart, shape) = ResolveShape(slideIdx, shapeIdx);
-            var paragraphs = shape.TextBody?.Elements<Drawing.Paragraph>().ToList()
-                ?? throw new ArgumentException("Shape has no text body");
-            if (paraIdx < 1 || paraIdx > paragraphs.Count)
-                throw new ArgumentException($"Paragraph {paraIdx} not found (shape has {paragraphs.Count} paragraphs)");
-
-            var para = paragraphs[paraIdx - 1];
-            var paraRuns = para.Elements<Drawing.Run>().ToList();
-            if (runIdx < 1 || runIdx > paraRuns.Count)
-                throw new ArgumentException($"Run {runIdx} not found (paragraph has {paraRuns.Count} runs)");
-
-            var targetRun = paraRuns[runIdx - 1];
-            var linkVal = properties.GetValueOrDefault("link");
-            var tooltipVal = properties.GetValueOrDefault("tooltip");
-            var runOnlyProps = properties
-                .Where(kv => !kv.Key.Equals("link", StringComparison.OrdinalIgnoreCase)
-                          && !kv.Key.Equals("tooltip", StringComparison.OrdinalIgnoreCase))
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
-            var unsupported = SetRunOrShapeProperties(runOnlyProps, new List<Drawing.Run> { targetRun }, shape, slidePart);
-            if (linkVal != null) ApplyRunHyperlink(slidePart, targetRun, linkVal, tooltipVal);
-            GetSlide(slidePart).Save();
-            return unsupported;
-        }
+        if (paraRunMatch.Success) return SetParagraphRunByPath(paraRunMatch, properties);
 
         // Try paragraph-level path: /slide[N]/shape[M]/paragraph[P]
         var paraMatch = Regex.Match(path, @"^/slide\[(\d+)\]/shape\[(\d+)\]/paragraph\[(\d+)\]$");
@@ -494,86 +427,11 @@ public partial class PowerPointHandler
         // needs to drive a different forwarder (SetAxisProperties, not series-prefix).
         var chartAxisSetMatch = Regex.Match(path,
             @"^/slide\[(\d+)\]/chart\[(\d+)\]/axis\[@role=([a-zA-Z0-9_]+)\]$");
-        if (chartAxisSetMatch.Success)
-        {
-            var caSlideIdx = int.Parse(chartAxisSetMatch.Groups[1].Value);
-            var caChartIdx = int.Parse(chartAxisSetMatch.Groups[2].Value);
-            var caRole = chartAxisSetMatch.Groups[3].Value;
-            var (caSlidePart, _, caChartPart, _) = ResolveChart(caSlideIdx, caChartIdx);
-            if (caChartPart == null)
-                throw new ArgumentException($"Axis Set not supported on extended charts.");
-            var axUnsupported = ChartHelper.SetAxisProperties(caChartPart, caRole, properties);
-            GetSlide(caSlidePart).Save();
-            return axUnsupported;
-        }
+        if (chartAxisSetMatch.Success) return SetChartAxisByPath(chartAxisSetMatch, properties);
 
         // Try chart path: /slide[N]/chart[M] or /slide[N]/chart[M]/series[K]
         var chartSetMatch = Regex.Match(path, @"^/slide\[(\d+)\]/chart\[(\d+)\](?:/series\[(\d+)\])?$");
-        if (chartSetMatch.Success)
-        {
-            var slideIdx = int.Parse(chartSetMatch.Groups[1].Value);
-            var chartIdx = int.Parse(chartSetMatch.Groups[2].Value);
-            var seriesIdx = chartSetMatch.Groups[3].Success ? int.Parse(chartSetMatch.Groups[3].Value) : 0;
-
-            var (slidePart, chartGf, chartPart, extChartPart) = ResolveChart(slideIdx, chartIdx);
-
-            // If series sub-path, prefix all properties with series{N}. for ChartSetter
-            var chartProps = new Dictionary<string, string>();
-            var gfProps = new Dictionary<string, string>();
-            if (seriesIdx > 0)
-            {
-                foreach (var (key, value) in properties)
-                    chartProps[$"series{seriesIdx}.{key}"] = value;
-            }
-            else
-            {
-                foreach (var (key, value) in properties)
-                {
-                    if (key.ToLowerInvariant() is "x" or "y" or "width" or "height" or "name")
-                        gfProps[key] = value;
-                    else
-                        chartProps[key] = value;
-                }
-            }
-
-            // Position/size
-            foreach (var (key, value) in gfProps)
-            {
-                switch (key.ToLowerInvariant())
-                {
-                    case "x" or "y" or "width" or "height":
-                    {
-                        var xfrm = chartGf.Transform ?? (chartGf.Transform = new Transform());
-                        TryApplyPositionSize(key.ToLowerInvariant(), value,
-                            xfrm.Offset ?? (xfrm.Offset = new Drawing.Offset()),
-                            xfrm.Extents ?? (xfrm.Extents = new Drawing.Extents()));
-                        break;
-                    }
-                    case "name":
-                        var nvPr = chartGf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties;
-                        if (nvPr != null) nvPr.Name = value;
-                        break;
-                }
-            }
-
-            List<string> unsupported;
-            if (chartPart != null)
-            {
-                unsupported = ChartHelper.SetChartProperties(chartPart, chartProps);
-            }
-            else if (extChartPart != null)
-            {
-                // cx:chart — delegates to ChartExBuilder.SetChartProperties.
-                // Same shared implementation as Excel/Word.
-                unsupported = ChartExBuilder.SetChartProperties(extChartPart, chartProps);
-            }
-            else
-            {
-                unsupported = chartProps.Keys.ToList();
-            }
-            GetSlide(slidePart).Save();
-            return unsupported;
-        }
+        if (chartSetMatch.Success) return SetChartByPath(chartSetMatch, properties);
 
         // Try table cell path: /slide[N]/table[M]/tr[R]/tc[C]
         var tblCellMatch = Regex.Match(path, @"^/slide\[(\d+)\]/table\[(\d+)\]/tr\[(\d+)\]/tc\[(\d+)\]$");
@@ -2126,5 +1984,162 @@ public partial class PowerPointHandler
             GetSlide(fbSlidePart).Save();
             return unsup;
         }
+    }
+
+    // ==================== Per-element-type Set helpers ====================
+    // Mechanical extractions from the original god-method Set(); each helper
+    // owns one path-pattern's full handling. Splitting was for AI-readability
+    // (each helper now <100 lines, fits in one Read) — no behavior change.
+
+    private List<string> SetNotesByPath(Match notesSetMatch, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(notesSetMatch.Groups[1].Value);
+        var slidePartsN = GetSlideParts().ToList();
+        if (slideIdx < 1 || slideIdx > slidePartsN.Count)
+            throw new ArgumentException($"Slide {slideIdx} not found (total: {slidePartsN.Count})");
+        var notesPart = EnsureNotesSlidePart(slidePartsN[slideIdx - 1]);
+        var unsupportedN = new List<string>();
+        foreach (var (key, value) in properties)
+        {
+            if (key.Equals("text", StringComparison.OrdinalIgnoreCase))
+                SetNotesText(notesPart, value);
+            else
+                unsupportedN.Add(key);
+        }
+        return unsupportedN;
+    }
+
+    private List<string> SetShapeRunByPath(Match runMatch, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(runMatch.Groups[1].Value);
+        var shapeIdx = int.Parse(runMatch.Groups[2].Value);
+        var runIdx = int.Parse(runMatch.Groups[3].Value);
+
+        var (slidePart, shape) = ResolveShape(slideIdx, shapeIdx);
+        var allRuns = GetAllRuns(shape);
+        if (runIdx < 1 || runIdx > allRuns.Count)
+            throw new ArgumentException($"Run {runIdx} not found (shape has {allRuns.Count} runs)");
+
+        var targetRun = allRuns[runIdx - 1];
+        var linkValRun = properties.GetValueOrDefault("link");
+        var tooltipValRun = properties.GetValueOrDefault("tooltip");
+        var runOnlyProps = properties
+            .Where(kv => !kv.Key.Equals("link", StringComparison.OrdinalIgnoreCase)
+                      && !kv.Key.Equals("tooltip", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        var unsupported = SetRunOrShapeProperties(runOnlyProps, new List<Drawing.Run> { targetRun }, shape, slidePart);
+        if (linkValRun != null) ApplyRunHyperlink(slidePart, targetRun, linkValRun, tooltipValRun);
+        GetSlide(slidePart).Save();
+        return unsupported;
+    }
+
+    private List<string> SetParagraphRunByPath(Match paraRunMatch, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(paraRunMatch.Groups[1].Value);
+        var shapeIdx = int.Parse(paraRunMatch.Groups[2].Value);
+        var paraIdx = int.Parse(paraRunMatch.Groups[3].Value);
+        var runIdx = int.Parse(paraRunMatch.Groups[4].Value);
+
+        var (slidePart, shape) = ResolveShape(slideIdx, shapeIdx);
+        var paragraphs = shape.TextBody?.Elements<Drawing.Paragraph>().ToList()
+            ?? throw new ArgumentException("Shape has no text body");
+        if (paraIdx < 1 || paraIdx > paragraphs.Count)
+            throw new ArgumentException($"Paragraph {paraIdx} not found (shape has {paragraphs.Count} paragraphs)");
+
+        var para = paragraphs[paraIdx - 1];
+        var paraRuns = para.Elements<Drawing.Run>().ToList();
+        if (runIdx < 1 || runIdx > paraRuns.Count)
+            throw new ArgumentException($"Run {runIdx} not found (paragraph has {paraRuns.Count} runs)");
+
+        var targetRun = paraRuns[runIdx - 1];
+        var linkVal = properties.GetValueOrDefault("link");
+        var tooltipVal = properties.GetValueOrDefault("tooltip");
+        var runOnlyProps = properties
+            .Where(kv => !kv.Key.Equals("link", StringComparison.OrdinalIgnoreCase)
+                      && !kv.Key.Equals("tooltip", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        var unsupported = SetRunOrShapeProperties(runOnlyProps, new List<Drawing.Run> { targetRun }, shape, slidePart);
+        if (linkVal != null) ApplyRunHyperlink(slidePart, targetRun, linkVal, tooltipVal);
+        GetSlide(slidePart).Save();
+        return unsupported;
+    }
+
+    private List<string> SetChartAxisByPath(Match chartAxisSetMatch, Dictionary<string, string> properties)
+    {
+        var caSlideIdx = int.Parse(chartAxisSetMatch.Groups[1].Value);
+        var caChartIdx = int.Parse(chartAxisSetMatch.Groups[2].Value);
+        var caRole = chartAxisSetMatch.Groups[3].Value;
+        var (caSlidePart, _, caChartPart, _) = ResolveChart(caSlideIdx, caChartIdx);
+        if (caChartPart == null)
+            throw new ArgumentException($"Axis Set not supported on extended charts.");
+        var axUnsupported = ChartHelper.SetAxisProperties(caChartPart, caRole, properties);
+        GetSlide(caSlidePart).Save();
+        return axUnsupported;
+    }
+
+    private List<string> SetChartByPath(Match chartSetMatch, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(chartSetMatch.Groups[1].Value);
+        var chartIdx = int.Parse(chartSetMatch.Groups[2].Value);
+        var seriesIdx = chartSetMatch.Groups[3].Success ? int.Parse(chartSetMatch.Groups[3].Value) : 0;
+
+        var (slidePart, chartGf, chartPart, extChartPart) = ResolveChart(slideIdx, chartIdx);
+
+        // If series sub-path, prefix all properties with series{N}. for ChartSetter
+        var chartProps = new Dictionary<string, string>();
+        var gfProps = new Dictionary<string, string>();
+        if (seriesIdx > 0)
+        {
+            foreach (var (key, value) in properties)
+                chartProps[$"series{seriesIdx}.{key}"] = value;
+        }
+        else
+        {
+            foreach (var (key, value) in properties)
+            {
+                if (key.ToLowerInvariant() is "x" or "y" or "width" or "height" or "name")
+                    gfProps[key] = value;
+                else
+                    chartProps[key] = value;
+            }
+        }
+
+        // Position/size
+        foreach (var (key, value) in gfProps)
+        {
+            switch (key.ToLowerInvariant())
+            {
+                case "x" or "y" or "width" or "height":
+                {
+                    var xfrm = chartGf.Transform ?? (chartGf.Transform = new Transform());
+                    TryApplyPositionSize(key.ToLowerInvariant(), value,
+                        xfrm.Offset ?? (xfrm.Offset = new Drawing.Offset()),
+                        xfrm.Extents ?? (xfrm.Extents = new Drawing.Extents()));
+                    break;
+                }
+                case "name":
+                    var nvPr = chartGf.NonVisualGraphicFrameProperties?.NonVisualDrawingProperties;
+                    if (nvPr != null) nvPr.Name = value;
+                    break;
+            }
+        }
+
+        List<string> unsupported;
+        if (chartPart != null)
+        {
+            unsupported = ChartHelper.SetChartProperties(chartPart, chartProps);
+        }
+        else if (extChartPart != null)
+        {
+            // cx:chart — delegates to ChartExBuilder.SetChartProperties.
+            // Same shared implementation as Excel/Word.
+            unsupported = ChartExBuilder.SetChartProperties(extChartPart, chartProps);
+        }
+        else
+        {
+            unsupported = chartProps.Keys.ToList();
+        }
+        GetSlide(slidePart).Save();
+        return unsupported;
     }
 }
