@@ -53,9 +53,9 @@
     "value": {
       "type": "string",
       "description": "threshold / comparison value.",
-      "aliases": ["formula1"],
+      "aliases": ["formula1", "formula"],
       "add": true, "set": true, "get": true,
-      "examples": ["--prop value=100"],
+      "examples": ["--prop value=100", "--prop formula=$A1>5"],
       "readback": "value/formula",
       "enforcement": "report"
     },
