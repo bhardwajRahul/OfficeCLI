@@ -648,7 +648,7 @@ public partial class WordHandler
             if (!abstractExists)
                 throw new ArgumentException(
                     $"abstractNumId={abstractNumId} not found in /numbering. " +
-                    "Create the abstractNum first, or pick an existing one via 'officecli word query <file> /numbering'.");
+                    "Create the abstractNum first, or pick an existing one via 'officecli query <file> abstractNum'.");
         }
         else
         {
