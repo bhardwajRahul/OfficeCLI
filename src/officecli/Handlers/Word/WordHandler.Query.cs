@@ -413,8 +413,7 @@ public partial class WordHandler
                     if (rf.EastAsia?.Value != null) styleNode.Format["font.eastAsia"] = rf.EastAsia.Value;
                     if (rf.HighAnsi?.Value != null) styleNode.Format["font.hAnsi"] = rf.HighAnsi.Value;
                     if (rf.ComplexScript?.Value != null) styleNode.Format["font.cs"] = rf.ComplexScript.Value;
-                    // Backcompat: keep flat "font" alias = ascii
-                    if (rf.Ascii?.Value != null) styleNode.Format["font"] = rf.Ascii.Value;
+                    // CONSISTENCY(canonical-keys): font.ascii is canonical; do not also emit flat "font" alias.
                 }
                 if (rPr.FontSize?.Val?.Value != null) styleNode.Format["size"] = $"{int.Parse(rPr.FontSize.Val.Value) / 2.0:0.##}pt";
                 if (rPr.Bold != null) styleNode.Format["bold"] = true;
@@ -467,32 +466,37 @@ public partial class WordHandler
                 // CONSISTENCY(outline-lvl): outlineLvl not yet exposed by paragraph Get.
                 if (pPr.OutlineLevel?.Val?.Value != null) styleNode.Format["outlineLvl"] = (int)pPr.OutlineLevel.Val.Value;
 
-                if (pPr.KeepNext != null) styleNode.Format["keepNext"] = true;
-                if (pPr.KeepLines != null) styleNode.Format["keepLines"] = true;
-                if (pPr.PageBreakBefore != null) styleNode.Format["pageBreakBefore"] = true;
-                // CONSISTENCY(contextual-spacing): not yet exposed by paragraph Get.
-                if (pPr.ContextualSpacing != null) styleNode.Format["contextualSpacing"] = true;
+                // Toggle props: respect explicit val="false" instead of treating presence as true.
+                if (pPr.KeepNext != null)
+                {
+                    var v = pPr.KeepNext.Val;
+                    styleNode.Format["keepNext"] = v == null || v.Value;
+                }
+                if (pPr.KeepLines != null)
+                {
+                    var v = pPr.KeepLines.Val;
+                    styleNode.Format["keepLines"] = v == null || v.Value;
+                }
+                if (pPr.PageBreakBefore != null)
+                {
+                    var v = pPr.PageBreakBefore.Val;
+                    styleNode.Format["pageBreakBefore"] = v == null || v.Value;
+                }
+                if (pPr.ContextualSpacing != null)
+                {
+                    var v = pPr.ContextualSpacing.Val;
+                    styleNode.Format["contextualSpacing"] = v == null || v.Value;
+                }
 
-                // Shading — paragraph Get convention: "shd" key, hex if clear+fill only, else "val;fill;color".
+                // CONSISTENCY(canonical-keys): split shading into shading.val/.fill/.color sub-keys.
                 if (pPr.Shading != null)
                 {
-                    var shdVal = pPr.Shading.Val?.InnerText ?? "";
+                    var shdVal = pPr.Shading.Val?.InnerText;
                     var shdFill = pPr.Shading.Fill?.Value;
                     var shdColor = pPr.Shading.Color?.Value;
-                    if (string.Equals(shdVal, "clear", StringComparison.OrdinalIgnoreCase)
-                        && !string.IsNullOrEmpty(shdFill)
-                        && string.IsNullOrEmpty(shdColor))
-                    {
-                        styleNode.Format["shd"] = ParseHelpers.FormatHexColor(shdFill);
-                    }
-                    else
-                    {
-                        var shdParts = new List<string>();
-                        if (!string.IsNullOrEmpty(shdVal)) shdParts.Add(shdVal);
-                        if (!string.IsNullOrEmpty(shdFill)) shdParts.Add(ParseHelpers.FormatHexColor(shdFill));
-                        if (!string.IsNullOrEmpty(shdColor)) shdParts.Add(ParseHelpers.FormatHexColor(shdColor));
-                        styleNode.Format["shd"] = string.Join(";", shdParts);
-                    }
+                    if (!string.IsNullOrEmpty(shdVal)) styleNode.Format["shading.val"] = shdVal;
+                    if (!string.IsNullOrEmpty(shdFill)) styleNode.Format["shading.fill"] = ParseHelpers.FormatHexColor(shdFill);
+                    if (!string.IsNullOrEmpty(shdColor)) styleNode.Format["shading.color"] = ParseHelpers.FormatHexColor(shdColor);
                 }
 
                 var pBdr = pPr.ParagraphBorders;
@@ -529,6 +533,16 @@ public partial class WordHandler
                     if (tabList.Count > 0) styleNode.Format["tabs"] = tabList;
                 }
             }
+
+            // Long-tail fallback: surface every rPr/pPr child element the
+            // curated reader did not consume. Keys are bare OOXML localNames
+            // (e.g. "kinsoku", "snapToGrid"), symmetric with the Set side's
+            // GenericXmlQuery.TryCreateTypedChild — so values round-trip
+            // through `get | set` without any special namespace.
+            // CONSISTENCY(generic-fallback): paragraph/run Get should adopt the
+            // same pattern in a future sweep so curated drift stops being a P0.
+            FillUnknownChildProps(rPr, styleNode);
+            FillUnknownChildProps(pPr, styleNode);
             return styleNode;
         }
 

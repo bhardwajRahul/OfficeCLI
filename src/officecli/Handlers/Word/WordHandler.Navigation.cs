@@ -858,14 +858,19 @@ public partial class WordHandler
                 }
                 if (pProps.KeepNext != null)
                 {
-                    node.Format["keepNext"] = true;
+                    var v = pProps.KeepNext.Val;
+                    node.Format["keepNext"] = v == null || v.Value;
                 }
                 if (pProps.KeepLines != null)
                 {
-                    node.Format["keepLines"] = true;
+                    var v = pProps.KeepLines.Val;
+                    node.Format["keepLines"] = v == null || v.Value;
                 }
                 if (pProps.PageBreakBefore != null)
-                    node.Format["pageBreakBefore"] = true;
+                {
+                    var v = pProps.PageBreakBefore.Val;
+                    node.Format["pageBreakBefore"] = v == null || v.Value;
+                }
                 if (pProps.WidowControl != null)
                 {
                     // Val == null or Val == true means enabled; Val == false means explicitly disabled
@@ -874,23 +879,14 @@ public partial class WordHandler
                 }
                 if (pProps.Shading != null)
                 {
-                    var shdVal = pProps.Shading.Val?.InnerText ?? "";
+                    // CONSISTENCY(canonical-keys): split shading into shading.val/.fill/.color sub-keys
+                    // matching the OOXML attribute structure. No compound semicolon string.
+                    var shdVal = pProps.Shading.Val?.InnerText;
                     var shdFill = pProps.Shading.Fill?.Value;
                     var shdColor = pProps.Shading.Color?.Value;
-                    if (string.Equals(shdVal, "clear", StringComparison.OrdinalIgnoreCase)
-                        && !string.IsNullOrEmpty(shdFill)
-                        && string.IsNullOrEmpty(shdColor))
-                    {
-                        node.Format["shd"] = ParseHelpers.FormatHexColor(shdFill);
-                    }
-                    else
-                    {
-                        var shdParts = new List<string>();
-                        if (!string.IsNullOrEmpty(shdVal)) shdParts.Add(shdVal);
-                        if (!string.IsNullOrEmpty(shdFill)) shdParts.Add(ParseHelpers.FormatHexColor(shdFill));
-                        if (!string.IsNullOrEmpty(shdColor)) shdParts.Add(ParseHelpers.FormatHexColor(shdColor));
-                        node.Format["shd"] = string.Join(";", shdParts);
-                    }
+                    if (!string.IsNullOrEmpty(shdVal)) node.Format["shading.val"] = shdVal;
+                    if (!string.IsNullOrEmpty(shdFill)) node.Format["shading.fill"] = ParseHelpers.FormatHexColor(shdFill);
+                    if (!string.IsNullOrEmpty(shdColor)) node.Format["shading.color"] = ParseHelpers.FormatHexColor(shdColor);
                 }
 
                 var pBdr = pProps.ParagraphBorders;
@@ -1689,14 +1685,12 @@ public partial class WordHandler
     private static void ReadBorder(BorderType? border, string key, DocumentNode node)
     {
         if (border?.Val == null) return;
-        var style = border.Val?.InnerText ?? "none";
-        var size = border.Size?.Value ?? 0u;
-        var color = border.Color?.Value;
-        var space = border.Space?.Value ?? 0u;
-        var parts = new List<string> { style };
-        if (size > 0 || color != null || space > 0) parts.Add(size.ToString());
-        if (color != null || space > 0) parts.Add(color is not null ? ParseHelpers.FormatHexColor(color) : "auto");
-        if (space > 0) parts.Add(space.ToString());
-        node.Format[key] = string.Join(";", parts);
+        // CONSISTENCY(canonical-keys): emit val on the parent key plus .sz/.color/.space sub-keys
+        // (matches Excel border.* schema). No compound semicolon-joined string — that was a private
+        // encoding that diverged from both OOXML and the rest of the project.
+        node.Format[key] = border.Val?.InnerText ?? "none";
+        if (border.Size?.Value is uint sz) node.Format[$"{key}.sz"] = sz;
+        if (border.Color?.Value is { } c) node.Format[$"{key}.color"] = ParseHelpers.FormatHexColor(c);
+        if (border.Space?.Value is uint sp) node.Format[$"{key}.space"] = sp;
     }
 }
