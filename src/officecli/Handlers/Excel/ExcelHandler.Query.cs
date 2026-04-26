@@ -334,6 +334,9 @@ public partial class ExcelHandler
                     if (col.OutlineLevel?.HasValue == true && col.OutlineLevel.Value > 0)
                         colNode.Format["outlineLevel"] = (int)col.OutlineLevel.Value;
                     if (col.Collapsed?.Value == true) colNode.Format["collapsed"] = true;
+                    // Long-tail CT_Col attributes (style, bestFit, phonetic, ...).
+                    // Symmetric with column Set's case-preserving SetAttribute fallback.
+                    FillUnknownAttrProps(col, colNode, "", CuratedColAttrs);
                 }
             }
             // Include cells in this column as children (non-empty rows only)
@@ -373,6 +376,9 @@ public partial class ExcelHandler
             if (row.OutlineLevel?.HasValue == true && row.OutlineLevel.Value > 0)
                 rowNode.Format["outlineLevel"] = (int)row.OutlineLevel.Value;
             if (row.Collapsed?.Value == true) rowNode.Format["collapsed"] = true;
+            // Long-tail CT_Row attributes (spans, style, ph, thickTop, thickBot,
+            // customFormat, ...). Symmetric with row Set's case-preserving fallback.
+            FillUnknownAttrProps(row, rowNode, "", CuratedRowAttrs);
             if (depth > 0)
             {
                 var eval = new Core.FormulaEvaluator(data, _doc.WorkbookPart);

@@ -1987,7 +1987,13 @@ public partial class ExcelHandler
                     }
                     break;
                 default:
-                    unsupported.Add(key);
+                    // Long-tail Column attribute (CT_Col attrs beyond width/
+                    // hidden/outlineLevel/collapsed/customWidth — e.g. style,
+                    // bestFit, phonetic). Set as raw OOXML attribute. Symmetric
+                    // with the column Get reader which now uses
+                    // FillUnknownAttrProps for unrecognized attrs. Preserve
+                    // original case (OOXML attribute names are case-sensitive).
+                    col.SetAttribute(new DocumentFormat.OpenXml.OpenXmlAttribute("", key, "", value));
                     break;
             }
         }
@@ -2128,7 +2134,11 @@ public partial class ExcelHandler
                         || value == "1" || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
                     break;
                 default:
-                    unsupported.Add(key);
+                    // Long-tail Row attribute (CT_Row attrs beyond height/
+                    // hidden/outlineLevel/collapsed — e.g. spans, style, ph,
+                    // thickTop, thickBot, customFormat). Symmetric with the
+                    // row Get reader. Preserve original case.
+                    row.SetAttribute(new DocumentFormat.OpenXml.OpenXmlAttribute("", key, "", value));
                     break;
             }
         }

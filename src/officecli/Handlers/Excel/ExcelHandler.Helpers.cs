@@ -3908,6 +3908,21 @@ public partial class ExcelHandler
         "locked", "hidden",
     };
 
+    // CT_Col curated attribute set (handled by the column Get reader).
+    private static readonly System.Collections.Generic.HashSet<string> CuratedColAttrs =
+        new(System.StringComparer.Ordinal)
+    {
+        "min", "max", "width", "hidden", "customWidth", "outlineLevel", "collapsed",
+    };
+
+    // CT_Row curated attribute set (handled by the row Get reader).
+    private static readonly System.Collections.Generic.HashSet<string> CuratedRowAttrs =
+        new(System.StringComparer.Ordinal)
+    {
+        "r", "ht", "height", "hidden", "outlineLevel", "collapsed",
+        "customHeight", "spans",
+    };
+
     // Long-tail OOXML fallback for sub-elements with rich child structure
     // (Font: `<charset val="1"/>`, `<family val="2"/>`, ...). Mirrors Word's
     // FillUnknownChildProps but emits keys with a dotted prefix
