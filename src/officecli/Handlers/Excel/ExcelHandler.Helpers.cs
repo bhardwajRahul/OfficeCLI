@@ -2213,15 +2213,19 @@ public partial class ExcelHandler
             case "width":
                 if (anchor.FromMarker != null && anchor.ToMarker != null)
                 {
+                    // CONSISTENCY(ole-width-units): mirror Add path's
+                    // ParseAnchorDimension — accept bare integer cell spans
+                    // OR unit-qualified strings ("6cm", "2in", "72pt").
                     var fromCol = int.TryParse(anchor.FromMarker.ColumnId?.Text, out var fc) ? fc : 0;
-                    anchor.ToMarker.ColumnId!.Text = (fromCol + ParseHelpers.SafeParseInt(value, "width")).ToString();
+                    anchor.ToMarker.ColumnId!.Text = (fromCol + ParseAnchorDimension(value, "width")).ToString();
                 }
                 return true;
             case "height":
                 if (anchor.FromMarker != null && anchor.ToMarker != null)
                 {
+                    // CONSISTENCY(ole-width-units): see width case above.
                     var fromRow = int.TryParse(anchor.FromMarker.RowId?.Text, out var fr) ? fr : 0;
-                    anchor.ToMarker.RowId!.Text = (fromRow + ParseHelpers.SafeParseInt(value, "height")).ToString();
+                    anchor.ToMarker.RowId!.Text = (fromRow + ParseAnchorDimension(value, "height")).ToString();
                 }
                 return true;
             default:
