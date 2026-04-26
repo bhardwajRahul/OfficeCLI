@@ -936,6 +936,11 @@ public partial class WordHandler
                     }
                     if (tabList.Count > 0) node.Format["tabs"] = tabList;
                 }
+
+                // Long-tail fallback: surface every pPr child the curated reader
+                // didn't consume. Symmetric with the Set-side TryCreateTypedChild
+                // fallback in SetElementParagraph (WordHandler.Set.Element.cs).
+                FillUnknownChildProps(pProps, node);
             }
 
             // First-run formatting on the paragraph node (like PPTX does for shapes).
@@ -1037,6 +1042,10 @@ public partial class WordHandler
             }
             // w14 text effects
             ReadW14TextEffects(run.RunProperties, node);
+            // Long-tail fallback: surface every rPr child the curated reader
+            // didn't consume. Symmetric with the Set-side TryCreateTypedChild
+            // fallback in SetElementRun (WordHandler.Set.Element.cs).
+            FillUnknownChildProps(run.RunProperties, node);
             // Image properties if run contains a Drawing
             var runDrawing = run.GetFirstChild<Drawing>();
             if (runDrawing != null)
@@ -1694,19 +1703,22 @@ public partial class WordHandler
         if (border.Space?.Value is uint sp) node.Format[$"{key}.space"] = sp;
     }
 
-    // OOXML localNames that the curated style/paragraph readers already map
+    // OOXML localNames that curated style/paragraph/run readers already map
     // to canonical keys. FillUnknownChildProps skips these so the long-tail
     // fallback doesn't re-expose them under their bare OOXML names alongside
     // the canonical key (e.g. avoid emitting both `bold: true` and `b: true`).
     private static readonly System.Collections.Generic.HashSet<string> CuratedStyleLocalNames =
         new(System.StringComparer.Ordinal)
     {
-        // rPr-side (covered by curated style/run readers)
+        // rPr-side (covered by curated style/paragraph/run readers)
         "b", "bCs", "i", "iCs", "sz", "szCs", "u", "color", "strike", "rFonts",
+        "highlight", "caps", "smallCaps", "dstrike", "vanish",
+        "outline", "shadow", "emboss", "imprint", "noProof", "rtl",
+        "vertAlign", "spacing", "shd",
         // pPr-side
-        "jc", "spacing", "ind", "shd", "outlineLvl",
+        "jc", "ind", "outlineLvl", "widowControl",
         "keepNext", "keepLines", "pageBreakBefore", "contextualSpacing",
-        "pBdr", "numPr", "tabs",
+        "pBdr", "numPr", "tabs", "pStyle",
     };
 
     // Long-tail OOXML fallback: walk a properties container (rPr/pPr/...) and
