@@ -513,6 +513,12 @@ public partial class WordHandler
                     break;
                 }
                 default:
+                    // Generic dotted "element.attr=value" fallback (pgSz.orient,
+                    // pgMar.top, cols.num, …). Same helper as paragraph/run
+                    // and /styles paths.
+                    if (key.Contains('.')
+                        && Core.TypedAttributeFallback.TrySet(sectPr, key, value))
+                        break;
                     unsupported.Add(key);
                     break;
             }

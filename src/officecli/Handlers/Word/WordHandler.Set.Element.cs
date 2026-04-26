@@ -1026,6 +1026,12 @@ public partial class WordHandler
                     break;
                 }
                 default:
+                    // Generic dotted "element.attr=value" fallback (shd.fill,
+                    // tcMar.left, tcBorders.top, …). Same helper as /styles
+                    // and paragraph/run paths.
+                    if (key.Contains('.')
+                        && Core.TypedAttributeFallback.TrySet(tcPr, key, value))
+                        break;
                     if (!GenericXmlQuery.TryCreateTypedChild(tcPr, key, value))
                         unsupported.Add(unsupported.Count == 0
                             ? $"{key} (valid cell props: text, font, size, bold, italic, color, alignment, valign, width, shd, border, colspan, fitText, textDirection, nowrap, padding)"
@@ -1101,6 +1107,11 @@ public partial class WordHandler
                         targetPara.RemoveAllChildren<Run>();
                         if (!string.IsNullOrEmpty(value))
                             targetPara.AppendChild(new Run(new Text(value) { Space = SpaceProcessingModeValues.Preserve }));
+                    }
+                    else if (key.Contains('.')
+                        && Core.TypedAttributeFallback.TrySet(trPr, key, value))
+                    {
+                        // Generic dotted fallback (e.g. trHeight.* attrs).
                     }
                     else if (!GenericXmlQuery.TryCreateTypedChild(trPr, key, value))
                         unsupported.Add(unsupported.Count == 0
@@ -1387,6 +1398,11 @@ public partial class WordHandler
                     break;
                 }
                 default:
+                    // Generic dotted "element.attr=value" fallback (tblBorders.*,
+                    // tblCellMar.*, etc.).
+                    if (key.Contains('.')
+                        && Core.TypedAttributeFallback.TrySet(tblPr, key, value))
+                        break;
                     if (!GenericXmlQuery.TryCreateTypedChild(tblPr, key, value))
                         unsupported.Add(unsupported.Count == 0
                             ? $"{key} (valid table props: width, alignment, style, indent, cellspacing, layout, padding, border*, colWidths, firstRow, lastRow, firstCol, lastCol, bandedRows, bandedCols, caption, description)"

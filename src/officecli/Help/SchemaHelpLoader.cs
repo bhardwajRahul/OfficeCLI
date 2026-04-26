@@ -294,6 +294,11 @@ internal static class SchemaHelpLoader
         // there with a precise message — unlike unknown bare keys, which
         // are filtered upstream.
         "ind.", "shd.", "u.", "spacing.", "pbdr.",
+        // Section-level: page size / margins / cols / type / etc.
+        "pgsz.", "pgmar.", "cols.",
+        // Table / row / cell containers: borders, margins, height, etc.
+        "tblborders.", "tblcellmar.", "tcborders.", "tcmar.", "trheight.",
+        "tcw.", "tblw.",
     };
 
     /// <summary>
