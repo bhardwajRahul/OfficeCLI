@@ -17,8 +17,8 @@
   "properties": {
     "shape": {
       "type": "string",
-      "description": "shape geometry name (rect, ellipse, line, roundRect, etc.). Set after Add is not supported — recreate the shape to change geometry.",
-      "add": true, "set": false, "get": true,
+      "description": "shape geometry name (rect, ellipse, line, roundRect, etc.). Set replaces the existing PresetGeometry preserving fill/line/effects.",
+      "add": true, "set": true, "get": true,
       "examples": ["--prop shape=rect"],
       "readback": "geometry preset name",
       "enforcement": "report"
@@ -70,9 +70,9 @@
     },
     "preset": {
       "type": "string",
-      "description": "geometry preset name (rect, ellipse, roundRect, triangle, rightArrow, etc.). Unknown presets fall back to rect with a stderr warning.",
+      "description": "geometry preset name (rect, ellipse, roundRect, triangle, rightArrow, etc.). Unknown presets fall back to rect with a stderr warning. Set replaces the existing PresetGeometry preserving fill/line/effects.",
       "aliases": ["shape"],
-      "add": true, "set": false, "get": false,
+      "add": true, "set": true, "get": true,
       "examples": ["--prop preset=ellipse"],
       "enforcement": "report"
     },
@@ -176,7 +176,7 @@
     "margin": {
       "type": "string",
       "description": "Inset for all four sides of the text body (points).",
-      "add": true, "set": false,
+      "add": true, "set": true, "get": true,
       "examples": ["--prop margin=4"],
       "enforcement": "report"
     },
