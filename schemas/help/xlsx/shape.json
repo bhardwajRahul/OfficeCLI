@@ -62,10 +62,12 @@
       "enforcement": "report"
     },
     "line": {
-      "type": "color",
-      "description": "Outline color, or 'none' to suppress the outline.",
-      "add": true, "set": false,
-      "examples": ["--prop line=#000000", "--prop line=none"],
+      "type": "string",
+      "description": "Outline color (or 'none'). Form: 'color[:width[:style]]', e.g. 'FF0000:1.5:dash'. width in points; style: solid|dash|dot|dashdot|longdash.",
+      "aliases": ["border"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop line=#000000", "--prop line=FF0000:1.5", "--prop line=none"],
+      "readback": "color or color:width",
       "enforcement": "report"
     },
     "preset": {
@@ -224,9 +226,16 @@
     },
     "align": {
       "type": "string",
-      "description": "Paragraph alignment: 'left' / 'center' (c/ctr) / 'right' (r).",
-      "add": true, "set": false,
+      "description": "Paragraph alignment: 'left' / 'center' (c/ctr) / 'right' (r) / 'justify'.",
+      "add": true, "set": true, "get": true,
       "examples": ["--prop align=center"],
+      "enforcement": "report"
+    },
+    "valign": {
+      "type": "string",
+      "description": "Vertical anchor: 'top' (t) / 'center' (ctr/middle/c/m) / 'bottom' (b).",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop valign=middle"],
       "enforcement": "report"
     }
   }
