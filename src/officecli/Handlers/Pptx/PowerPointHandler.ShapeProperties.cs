@@ -605,7 +605,7 @@ public partial class PowerPointHandler
                     break;
                 }
 
-                case "spacing" or "charspacing" or "letterspacing":
+                case "spacing" or "charspacing" or "letterspacing" or "spc":
                 {
                     // Character spacing in points (e.g. "2" = +2pt, "-1" = -1pt)
                     // Stored as 1/100th of a point in OOXML (POI: setSpc((int)(100*spc)))
@@ -995,7 +995,15 @@ public partial class PowerPointHandler
                     // drawingML CT_TextCharacterProperties attribute set; fall
                     // back to TryCreateTypedChild for child-pattern keys.
                     bool handledByRun = false;
-                    if (runContext && runs.Count > 0 && DrawingRunPropertyAttrs.Contains(key))
+                    // CONSISTENCY(rpr-attr-fallback): drawingML run-property
+                    // attributes (spc, lang, kern, cap, baseline, ...) must
+                    // route to rPr regardless of runContext. Shape-level Set
+                    // applies to all runs (mirrors how bold/size/font work
+                    // above); run-level Set applies to the targeted run only.
+                    // Without this, shape-level spc/lang silently fell through
+                    // to SetGenericAttribute(sp, ...) and wrote attributes onto
+                    // the <p:sp> element, which Office ignores.
+                    if (runs.Count > 0 && DrawingRunPropertyAttrs.Contains(key))
                     {
                         if (!IsValidDrawingRunAttrValue(key, value))
                         {

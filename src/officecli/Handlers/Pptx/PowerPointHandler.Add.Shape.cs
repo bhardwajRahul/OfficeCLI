@@ -417,7 +417,14 @@ public partial class PowerPointHandler
                       "baseline", "superscript", "subscript",
                       "textwarp", "wordart", "autofit",
                       "lineopacity", "line.opacity",
-                      "image", "imagefill" };
+                      "image", "imagefill",
+                      // CONSISTENCY(rpr-attr-fallback / R21-fuzzer-1+2): drawingML
+                      // run-property attributes must reach SetRunOrShapeProperties
+                      // so the long-tail rPr-attribute branch routes them to the
+                      // first run instead of dropping them on the <p:sp> element.
+                      "lang", "altLang", "altlang", "spc", "kern", "cap",
+                      "kumimoji", "normalizeH", "normalizeh", "noProof", "noproof",
+                      "dirty", "smtClean", "smtclean", "smtId", "smtid", "err" };
                 var effectProps = properties
                     .Where(kv => effectKeys.Contains(kv.Key))
                     .ToDictionary(kv => kv.Key, kv => kv.Value);

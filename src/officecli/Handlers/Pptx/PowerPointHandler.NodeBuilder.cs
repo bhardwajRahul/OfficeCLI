@@ -493,6 +493,13 @@ public partial class PowerPointHandler
                 var linkUrl = ReadRunHyperlinkUrl(firstRun, part);
                 if (linkUrl != null) node.Format["link"] = linkUrl;
             }
+
+            // CONSISTENCY(rpr-attr-fallback / R21-fuzzer-1+2): surface long-tail
+            // rPr attributes (lang, kern, kumimoji, normalizeH, ...) at shape
+            // level too, mirroring BuildRunNode. Without this, shape-level Add
+            // can write `lang` to first-run rPr but shape-level Get cannot
+            // surface it unless the user descends to /shape[N]/r[1] explicitly.
+            FillUnknownRunProps(firstRun.RunProperties, node);
         }
 
         // Shape-level hyperlink (on NonVisualDrawingProperties)

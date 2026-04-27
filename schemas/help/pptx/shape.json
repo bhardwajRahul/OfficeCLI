@@ -233,6 +233,32 @@
       "readback": "none | small | all",
       "enforcement": "report"
     },
+    "lang": {
+      "type": "string",
+      "description": "BCP-47 language tag on first run rPr (drawingML rPr/@lang).",
+      "aliases": ["altLang", "altlang"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop lang=en-US"],
+      "readback": "BCP-47 tag",
+      "enforcement": "report"
+    },
+    "spc": {
+      "type": "number",
+      "description": "character spacing in 1/100 pt (drawingML rPr/@spc).",
+      "aliases": ["spacing", "charspacing", "letterspacing"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop spc=200"],
+      "readback": "integer",
+      "enforcement": "report"
+    },
+    "kern": {
+      "type": "number",
+      "description": "minimum kerning size in 1/100 pt (drawingML rPr/@kern).",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop kern=1200"],
+      "readback": "integer",
+      "enforcement": "report"
+    },
     "valign": {
       "type": "enum",
       "description": "vertical alignment of text within shape.",
