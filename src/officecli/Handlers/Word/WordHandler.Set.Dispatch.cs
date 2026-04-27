@@ -53,7 +53,21 @@ public partial class WordHandler
                             break;
                         case "rotation":
                             xml = System.Text.RegularExpressions.Regex.Replace(xml,
-                                @"rotation:\d+", $@"rotation:{value}");
+                                @"rotation\s*:\s*-?\d+(?:\.\d+)?", $@"rotation:{value}");
+                            break;
+                        case "size":
+                            // BUG-R36-B3: font-size on the v:textpath. Accept bare or pt-suffixed.
+                            var sz = value.EndsWith("pt", StringComparison.OrdinalIgnoreCase) ? value : value + "pt";
+                            xml = System.Text.RegularExpressions.Regex.Replace(xml,
+                                @"font-size:[^;""]+", $@"font-size:{sz}");
+                            break;
+                        case "width":
+                            xml = System.Text.RegularExpressions.Regex.Replace(xml,
+                                @"width:[^;""]+", $@"width:{value}");
+                            break;
+                        case "height":
+                            xml = System.Text.RegularExpressions.Regex.Replace(xml,
+                                @"height:[^;""]+", $@"height:{value}");
                             break;
                         default:
                             unsupported.Add(key);

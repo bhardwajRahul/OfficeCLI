@@ -172,6 +172,14 @@ public partial class WordHandler
                     var rotMatch = System.Text.RegularExpressions.Regex.Match(xml, @"rotation\s*:\s*(-?\d+(?:\.\d+)?)");
                     if (rotMatch.Success) node.Format["rotation"] = rotMatch.Groups[1].Value;
 
+                    // BUG-R36-B3: surface size/width/height so callers can read them back.
+                    var sizeMatch = System.Text.RegularExpressions.Regex.Match(xml, @"font-size\s*:\s*([^;""]+)");
+                    if (sizeMatch.Success) node.Format["size"] = sizeMatch.Groups[1].Value.Trim();
+                    var widthMatch = System.Text.RegularExpressions.Regex.Match(xml, @"(?<![-\w])width\s*:\s*([^;""]+)");
+                    if (widthMatch.Success) node.Format["width"] = widthMatch.Groups[1].Value.Trim();
+                    var heightMatch = System.Text.RegularExpressions.Regex.Match(xml, @"(?<![-\w])height\s*:\s*([^;""]+)");
+                    if (heightMatch.Success) node.Format["height"] = heightMatch.Groups[1].Value.Trim();
+
                     return node;
                 }
             }
