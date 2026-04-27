@@ -104,6 +104,12 @@ internal static partial class ChartHelper
     {
         var normalizedRole = role.ToLowerInvariant();
         var translated = new Dictionary<string, string>();
+        var directlyHandled = new List<string>();
+
+        // Resolve target axis once for direct-apply paths.
+        var chart = chartPart.ChartSpace?.GetFirstChild<C.Chart>();
+        var plotArea = chart?.GetFirstChild<C.PlotArea>();
+        var targetAxis = plotArea != null ? FindAxisByRole(plotArea, normalizedRole) : null;
 
         foreach (var (key, value) in properties)
         {
@@ -134,6 +140,64 @@ internal static partial class ChartHelper
                         : "yaxis.labelrotation"] = value;
                     break;
 
+                case "visible":
+                    // Map by role to the existing role-specific cataxisvisible/valaxisvisible
+                    // keys. value/value2/series are not split in the legacy setter, so for
+                    // value2 we apply directly on the resolved axis.
+                    if (normalizedRole is "category")
+                        translated["cataxisvisible"] = value;
+                    else if (normalizedRole is "value" or "series")
+                        translated["valaxisvisible"] = value;
+                    else if (targetAxis is OpenXmlCompositeElement axCe)
+                    {
+                        axCe.RemoveAllChildren<C.Delete>();
+                        axCe.InsertAfter(
+                            new C.Delete { Val = !ParseHelpers.IsTruthy(value) },
+                            axCe.GetFirstChild<C.Scaling>());
+                        directlyHandled.Add(key);
+                    }
+                    else
+                    {
+                        directlyHandled.Add(key); // axis missing; treat as no-op silently
+                    }
+                    break;
+
+                case "majorgridlines":
+                case "minorgridlines":
+                {
+                    if (targetAxis is OpenXmlCompositeElement axCe)
+                    {
+                        var enable = !value.Equals("none", StringComparison.OrdinalIgnoreCase)
+                            && !value.Equals("false", StringComparison.OrdinalIgnoreCase);
+                        if (lower == "majorgridlines")
+                        {
+                            axCe.RemoveAllChildren<C.MajorGridlines>();
+                            if (enable)
+                            {
+                                var gl = new C.MajorGridlines();
+                                if (!value.Equals("true", StringComparison.OrdinalIgnoreCase))
+                                    gl.AppendChild(BuildLineShapeProperties(value));
+                                axCe.InsertAfter(gl, axCe.GetFirstChild<C.AxisPosition>());
+                            }
+                        }
+                        else
+                        {
+                            axCe.RemoveAllChildren<C.MinorGridlines>();
+                            if (enable)
+                            {
+                                var gl = new C.MinorGridlines();
+                                if (!value.Equals("true", StringComparison.OrdinalIgnoreCase))
+                                    gl.AppendChild(BuildLineShapeProperties(value));
+                                var afterEl = (OpenXmlElement?)axCe.GetFirstChild<C.MajorGridlines>()
+                                    ?? axCe.GetFirstChild<C.AxisPosition>();
+                                if (afterEl != null) axCe.InsertAfter(gl, afterEl);
+                            }
+                        }
+                    }
+                    directlyHandled.Add(key);
+                    break;
+                }
+
                 default:
                     // Forward unknown keys verbatim; SetChartProperties will flag them as unsupported.
                     translated[key] = value;
@@ -141,6 +205,10 @@ internal static partial class ChartHelper
             }
         }
 
-        return SetChartProperties(chartPart, translated);
+        var unsupported = translated.Count > 0
+            ? SetChartProperties(chartPart, translated)
+            : new List<string>();
+        // directlyHandled keys are already applied; do not surface as unsupported.
+        return unsupported;
     }
 }
