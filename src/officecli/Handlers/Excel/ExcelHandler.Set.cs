@@ -386,6 +386,20 @@ public partial class ExcelHandler
                             .Where(p => p.Key.Equals("type", StringComparison.OrdinalIgnoreCase))
                             .Select(p => p.Value?.ToLowerInvariant())
                             .Any(v => v is "number" or "num");
+                        var explicitTypeIsDate = hasExplicitType && properties
+                            .Where(p => p.Key.Equals("type", StringComparison.OrdinalIgnoreCase))
+                            .Select(p => p.Value?.ToLowerInvariant())
+                            .Any(v => v is "date");
+
+                        // BUG-FIX(B10): when caller explicitly says type=date, the
+                        // value MUST parse as a real date. Falling through to the
+                        // generic else-branch would store an invalid date-shaped
+                        // string in a numeric-styled cell. Reject up-front (mirrors
+                        // explicitTypeIsNumber's guard against non-numeric input).
+                        if (explicitTypeIsDate && !TryParseIsoDateFlexible(cellValue, out _))
+                            throw new ArgumentException(
+                                $"Cannot store '{cellValue}' as date; value must be ISO 8601 (yyyy-MM-dd) " +
+                                $"and represent a real calendar day. Use type=string to keep the literal text.");
 
                         // Auto-detect ISO date (only if user did NOT explicitly set type=string)
                         // R13-2: accept date-with-time variants (T and space separators).

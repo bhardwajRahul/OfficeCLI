@@ -367,6 +367,15 @@ public partial class ExcelHandler
                         cell.CellValue = new CellValue(
                             dt.ToOADate().ToString(System.Globalization.CultureInfo.InvariantCulture));
                     }
+                    else if (!string.IsNullOrEmpty(dateText))
+                    {
+                        // BUG-FIX(B10): if user said type=date but the value isn't
+                        // parseable, refuse to leave a date-shaped string in a
+                        // numeric-styled cell — that produces invalid OOXML.
+                        throw new ArgumentException(
+                            $"Cannot store '{dateText}' as date; value must be ISO 8601 (yyyy-MM-dd) " +
+                            $"and represent a real calendar day. Use type=string to keep the literal text.");
+                    }
                     // Apply a default date number format unless the caller
                     // already supplied one — matches Set's type=date guard.
                     if (!properties.ContainsKey("numberformat")
