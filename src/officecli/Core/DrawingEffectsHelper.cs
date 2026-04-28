@@ -36,7 +36,7 @@ internal static class DrawingEffectsHelper
             RotateWithShape = false
         };
         var clr = colorBuilder(parts[0]);
-        clr.AppendChild(new Drawing.Alpha { Val = (int)(opacity * 1000) });
+        SetAlphaChild(clr, (int)(opacity * 1000));
         shadow.AppendChild(clr);
         return shadow;
     }
@@ -55,7 +55,7 @@ internal static class DrawingEffectsHelper
 
         var glow = new Drawing.Glow { Radius = (long)(radiusPt * 12700) };
         var clr = colorBuilder(parts[0]);
-        clr.AppendChild(new Drawing.Alpha { Val = (int)(opacity * 1000) });
+        SetAlphaChild(clr, (int)(opacity * 1000));
         glow.AppendChild(clr);
         return glow;
     }
@@ -222,6 +222,21 @@ internal static class DrawingEffectsHelper
     }
 
     // --- Private helpers ---
+
+    /// <summary>
+    /// Set or replace the Alpha child on a color element. Callers like BuildOuterShadow
+    /// and BuildGlow apply an explicit opacity from the user value string; if the color
+    /// builder (e.g. ARGB hex like "80FF0000") already produced an Alpha child, blindly
+    /// appending another would yield two a:alpha siblings — invalid OOXML which Office
+    /// either rejects or interprets unpredictably. Replace any existing alpha to keep
+    /// the user's opacity authoritative for the effect.
+    /// </summary>
+    private static void SetAlphaChild(OpenXmlElement colorElement, int alphaVal)
+    {
+        var existing = colorElement.GetFirstChild<Drawing.Alpha>();
+        if (existing != null) existing.Remove();
+        colorElement.AppendChild(new Drawing.Alpha { Val = alphaVal });
+    }
 
     private static double ParseParam(string[] parts, int index, double defaultValue, string paramName)
     {
