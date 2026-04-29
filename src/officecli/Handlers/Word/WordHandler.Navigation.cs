@@ -1359,7 +1359,13 @@ public partial class WordHandler
             if (run.RunProperties?.Emboss != null) node.Format["emboss"] = true;
             if (run.RunProperties?.Imprint != null) node.Format["imprint"] = true;
             if (run.RunProperties?.NoProof != null) node.Format["noproof"] = true;
-            if (run.RunProperties?.RightToLeftText != null) node.Format["rtl"] = true;
+            if (run.RunProperties?.RightToLeftText != null)
+            {
+                // <w:rtl/> with no Val attribute implies true; <w:rtl w:val="0"/>
+                // is an explicit off-override (overrides inherited docDefaults).
+                var rtlVal = run.RunProperties.RightToLeftText.Val;
+                node.Format["rtl"] = rtlVal == null ? true : rtlVal.Value;
+            }
             if (run.RunProperties?.VerticalTextAlignment?.Val?.Value == VerticalPositionValues.Superscript)
                 node.Format["superscript"] = true;
             if (run.RunProperties?.VerticalTextAlignment?.Val?.Value == VerticalPositionValues.Subscript)

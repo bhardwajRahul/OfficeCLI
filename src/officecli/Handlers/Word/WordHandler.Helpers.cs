@@ -1098,7 +1098,12 @@ public partial class WordHandler
                         "ltr" or "lefttoright" or "left-to-right" or "false" or "0" or "" => false,
                         _ => throw new ArgumentException($"Invalid direction value: '{value}'. Valid values: rtl, ltr.")
                     };
-                if (rtlOn) InsertRunPropInSchemaOrder(props, new RightToLeftText());
+                // Write either <w:rtl/> (on) or <w:rtl w:val="0"/> (explicit off
+                // to override an inherited docDefaults / style rtl=true).
+                if (rtlOn)
+                    InsertRunPropInSchemaOrder(props, new RightToLeftText());
+                else
+                    InsertRunPropInSchemaOrder(props, new RightToLeftText { Val = DocumentFormat.OpenXml.OnOffValue.FromBoolean(false) });
                 return true;
             case "charspacing" or "letterspacing" or "spacing":
                 var csPt = value.EndsWith("pt", StringComparison.OrdinalIgnoreCase)

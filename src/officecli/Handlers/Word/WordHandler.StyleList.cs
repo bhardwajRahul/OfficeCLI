@@ -398,6 +398,20 @@ public partial class WordHandler
             EmitSrc("effective.italic", "italic");
         }
 
+        if (effective.RightToLeftText != null)
+        {
+            // Honor explicit <w:rtl w:val="0"/> off-override. RightToLeftText is
+            // an OnOff element: missing Val means true, Val="0"/"false" means
+            // explicit off (used to defeat an inherited docDefaults rtl=true).
+            // Emitted even when direct `rtl` is also present so callers can see
+            // both the direct value and the cascade-resolved effective state —
+            // matters for RTL because docDefaults.rtl is the common inheritance
+            // path that callers want to verify against the per-run override.
+            var rtlVal = effective.RightToLeftText.Val;
+            node.Format["effective.rtl"] = rtlVal == null ? true : rtlVal.Value;
+            EmitSrc("effective.rtl", "rtl");
+        }
+
         if (!node.Format.ContainsKey("color"))
         {
             if (effective.Color?.Val?.Value != null)

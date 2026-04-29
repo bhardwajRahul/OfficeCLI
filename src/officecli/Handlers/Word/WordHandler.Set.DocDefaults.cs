@@ -92,6 +92,22 @@ public partial class WordHandler
                 SaveStyles();
                 return true;
             }
+            case "docdefaults.rtl" or "docdefaults.direction" or "docdefaults.dir":
+            {
+                // <w:rtl/> on rPrDefault makes RTL the document-wide default;
+                // explicit run rtl=false overrides per-run. Mirrors bold/italic.
+                var rPr = EnsureRunPropsDefault();
+                bool rtlOn = key.ToLowerInvariant() == "docdefaults.rtl"
+                    ? IsTruthy(value)
+                    : ParseDirectionRtl(value);
+                // <w:rtl/> sits late in CT_RPr (after vertAlign), so AppendChild
+                // is schema-correct here — unlike Bold/Italic which must precede
+                // Color/FontSize.
+                rPr.RemoveAllChildren<RightToLeftText>();
+                if (rtlOn) rPr.AppendChild(new RightToLeftText());
+                SaveStyles();
+                return true;
+            }
 
             // ==================== Default Paragraph Properties ====================
             case "docdefaults.alignment" or "docdefaults.align":
@@ -289,6 +305,8 @@ public partial class WordHandler
                 node.Format["docDefaults.bold"] = true;
             if (rPr.GetFirstChild<Italic>() != null)
                 node.Format["docDefaults.italic"] = true;
+            if (rPr.GetFirstChild<RightToLeftText>() != null)
+                node.Format["docDefaults.rtl"] = true;
         }
 
         // Paragraph properties defaults
