@@ -784,7 +784,17 @@ public partial class WordHandler
 
         // Font
         var fonts = rProps.RunFonts;
-        var font = fonts?.EastAsia?.Value ?? fonts?.Ascii?.Value ?? fonts?.HighAnsi?.Value;
+        // CS slot priority for RTL runs (Arabic / Hebrew). When the run is
+        // tagged <w:rtl/>, ComplexScript is the script-correct face — without
+        // this, ar/he runs that only carry rFonts/@w:cs (the LocaleFontRegistry
+        // default for ar="Arabic Typesetting") rendered in the body's default
+        // Latin font. EA-priority is preserved for the default LTR path so CJK
+        // runs continue to read rFonts/@w:eastAsia.
+        var isRtlRun = rProps.RightToLeftText != null
+            && (rProps.RightToLeftText.Val == null || rProps.RightToLeftText.Val.Value);
+        var font = isRtlRun
+            ? (fonts?.ComplexScript?.Value ?? fonts?.Ascii?.Value ?? fonts?.HighAnsi?.Value)
+            : (fonts?.EastAsia?.Value ?? fonts?.Ascii?.Value ?? fonts?.HighAnsi?.Value);
         // Skip theme font references (e.g. "+mn-lt", "+mj-ea") — those are shorthand
         // markers, not real font names; the theme-resolved value would already be in
         // AsciiTheme etc. which we don't read here.
