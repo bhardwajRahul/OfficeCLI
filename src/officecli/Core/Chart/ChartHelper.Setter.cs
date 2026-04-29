@@ -2000,6 +2000,45 @@ internal static partial class ChartHelper
                         lstStyle.AppendChild(lvl1);
                     }
                     lvl1.RightToLeft = rtlOn;
+
+                    // CONSISTENCY(rtl-cascade): axis-level c:txPr overrides
+                    // chartSpace c:txPr in OOXML, so direction must propagate
+                    // into every per-axis (catAx/valAx/serAx/dateAx) and
+                    // dLbls c:txPr that exists. Without this, Arabic axis
+                    // labels render LTR even when chart direction=rtl is set.
+                    static void StampLvl1Rtl(C.TextProperties tp, bool on)
+                    {
+                        var ls = tp.GetFirstChild<Drawing.ListStyle>()
+                            ?? tp.AppendChild(new Drawing.ListStyle());
+                        var l1 = ls.GetFirstChild<Drawing.Level1ParagraphProperties>();
+                        if (l1 == null)
+                        {
+                            l1 = new Drawing.Level1ParagraphProperties();
+                            ls.AppendChild(l1);
+                        }
+                        l1.RightToLeft = on;
+                    }
+                    var plotAreaRtl = chart.GetFirstChild<C.PlotArea>();
+                    if (plotAreaRtl != null)
+                    {
+                        foreach (var axisTxPr in plotAreaRtl.Descendants<C.TextProperties>().ToList())
+                            StampLvl1Rtl(axisTxPr, rtlOn);
+                    }
+                    // Title rich text: walk c:title/c:tx/c:rich a:lstStyle a:lvl1pPr.
+                    var titleEl = chart.GetFirstChild<C.Title>();
+                    var titleRich = titleEl?.ChartText?.RichText;
+                    if (titleRich != null)
+                    {
+                        var tLst = titleRich.GetFirstChild<Drawing.ListStyle>()
+                            ?? titleRich.AppendChild(new Drawing.ListStyle());
+                        var tLvl1 = tLst.GetFirstChild<Drawing.Level1ParagraphProperties>();
+                        if (tLvl1 == null)
+                        {
+                            tLvl1 = new Drawing.Level1ParagraphProperties();
+                            tLst.AppendChild(tLvl1);
+                        }
+                        tLvl1.RightToLeft = rtlOn;
+                    }
                     break;
                 }
 
