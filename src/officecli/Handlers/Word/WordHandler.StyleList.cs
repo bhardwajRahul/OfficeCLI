@@ -67,6 +67,28 @@ public partial class WordHandler
                 if (styleRPr != null)
                     MergeRunProperties(effective, styleRPr,
                         $"/styles/{chain[i].StyleId?.Value}", sources);
+
+                // CONSISTENCY(rtl-cascade): paragraph-style direction lives
+                // ONLY on style pPr (<w:bidi/>) — we do not stamp <w:rtl/> on
+                // styleRPr because CT_RPr requires <w:rFonts> as the first
+                // child and a bare <w:rtl/> trips the validator. Lift the
+                // pPr/bidi flag into the effective run's RightToLeftText so
+                // runs inheriting the style still resolve effective.rtl.
+                var stylePPr = chain[i].StyleParagraphProperties;
+                var styleBiDi = stylePPr?.GetFirstChild<BiDi>();
+                if (styleBiDi != null)
+                {
+                    var biVal = styleBiDi.Val;
+                    bool on = biVal == null
+                        || biVal.InnerText == "1"
+                        || biVal.InnerText == "true"
+                        || (biVal.HasValue && biVal.Value);
+                    effective.RightToLeftText = on
+                        ? new RightToLeftText()
+                        : new RightToLeftText { Val = DocumentFormat.OpenXml.OnOffValue.FromBoolean(false) };
+                    if (sources != null)
+                        sources["effective.rtl"] = $"/styles/{chain[i].StyleId?.Value}";
+                }
             }
         }
 

@@ -1227,16 +1227,18 @@ public partial class WordHandler
                 bool styleRtl = ParseDirectionRtl(value);
                 if (styleRtl) dPPr.BiDi = new BiDi();
                 else dPPr.RemoveAllChildren<BiDi>();
-                // CONSISTENCY(rtl-cascade): paragraph styles must also stamp
-                // <w:rtl/> on StyleRunProperties so runs inheriting the style
-                // pick up character-level RTL (mirrors AddStyle direction=rtl
-                // path and what Word's UI writes when toggling paragraph-style
-                // direction).
-                if (style.Type?.Value == StyleValues.Paragraph)
+                // CONSISTENCY(rtl-cascade): style direction lives ONLY on
+                // pPr/<w:bidi/>. We do NOT stamp <w:rtl/> on StyleRunProperties:
+                // CT_RPr requires <w:rFonts> first, and a bare <w:rtl/> there
+                // produces validator errors in real Office. The
+                // effective.direction reduction follows pPr/bidi via the style
+                // chain, so runs still resolve RTL when the paragraph
+                // inherits this style. Strip any leftover <w:rtl/> that
+                // earlier writes may have stamped on existing styles.
+                if (style.StyleRunProperties is { } existingRPr)
                 {
-                    var dRPr = style.StyleRunProperties ?? style.AppendChild(new StyleRunProperties());
-                    dRPr.RemoveAllChildren<RightToLeftText>();
-                    if (styleRtl) dRPr.AppendChild(new RightToLeftText());
+                    existingRPr.RemoveAllChildren<RightToLeftText>();
+                    if (!existingRPr.HasChildren) existingRPr.Remove();
                 }
                 continue;
             }

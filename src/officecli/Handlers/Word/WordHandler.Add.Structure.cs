@@ -477,15 +477,16 @@ public partial class WordHandler
         // Style run properties
         var styleRPr = new StyleRunProperties();
         bool hasRPr = false;
-        // CONSISTENCY(rtl-cascade): paragraph-style direction=rtl must also
-        // synthesize StyleRunProperties carrying <w:rtl/> so runs inheriting
-        // this style pick up character-level RTL — mirrors what Word's UI
-        // writes when toggling paragraph-style direction.
-        if (sStyleRtlFlag == true && styleType == StyleValues.Paragraph)
-        {
-            styleRPr.AppendChild(new RightToLeftText());
-            hasRPr = true;
-        }
+        // CONSISTENCY(rtl-cascade): paragraph-style direction=rtl is carried
+        // ONLY on style pPr (<w:bidi/>). We deliberately do NOT stamp
+        // <w:rtl/> on StyleRunProperties — CT_RPr in styleRPr requires
+        // <w:rFonts> as the first child (schema order), and a bare <w:rtl/>
+        // there yields a 100-error validator storm in real Office. The
+        // effective.direction reduction already walks pPr/bidi via the style
+        // chain (see ResolveEffectiveParagraphStyleProperties), so runs in
+        // paragraphs that inherit the style still resolve RTL correctly.
+        // (Suppresses R7-5 regression: invalid child element 'w:rtl'.)
+        _ = sStyleRtlFlag;
         if (properties.TryGetValue("font", out var sFont))
         {
             styleRPr.RunFonts = new RunFonts { Ascii = sFont, HighAnsi = sFont, EastAsia = sFont };
