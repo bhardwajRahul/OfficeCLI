@@ -2451,6 +2451,60 @@ public partial class WordHandler
             sectPr.AppendChild(newChild);
     }
 
+    /// <summary>
+    /// CT_TblPrBase schema order:
+    ///   tblStyle, tblpPr, tblOverlap, bidiVisual, tblStyleRowBandSize,
+    ///   tblStyleColBandSize, tblW, jc, tblCellSpacing, tblInd, tblBorders,
+    ///   shd, tblLayout, tblCellMar, tblLook, tblCaption, tblDescription,
+    ///   tblPrChange.
+    /// </summary>
+    private static int TblPrChildOrder(OpenXmlElement el) => el switch
+    {
+        TableStyle => 0,
+        TablePositionProperties => 1,
+        TableOverlap => 2,
+        BiDiVisual => 3,
+        TableStyleRowBandSize => 4,
+        TableStyleColumnBandSize => 5,
+        TableWidth => 6,
+        TableJustification => 7,
+        TableCellSpacing => 8,
+        TableIndentation => 9,
+        TableBorders => 10,
+        Shading => 11,
+        TableLayout => 12,
+        TableCellMarginDefault => 13,
+        TableLook => 14,
+        TableCaption => 15,
+        TableDescription => 16,
+        TablePropertiesChange => 17,
+        _ => 99,
+    };
+
+    /// <summary>
+    /// Insert <paramref name="newChild"/> into <paramref name="tblPr"/> at the
+    /// position dictated by CT_TblPrBase schema order. Required for elements
+    /// like &lt;w:bidiVisual/&gt; which Word's schema validator rejects when
+    /// appended after &lt;w:tblBorders/&gt;.
+    /// </summary>
+    private static void InsertTblPrChildInOrder(TableProperties tblPr, OpenXmlElement newChild)
+    {
+        var newRank = TblPrChildOrder(newChild);
+        OpenXmlElement? successor = null;
+        foreach (var child in tblPr.ChildElements)
+        {
+            if (TblPrChildOrder(child) > newRank)
+            {
+                successor = child;
+                break;
+            }
+        }
+        if (successor != null)
+            successor.InsertBeforeSelf(newChild);
+        else
+            tblPr.AppendChild(newChild);
+    }
+
     // ==================== w14 Text Effects ====================
 
     private const string W14Ns = "http://schemas.microsoft.com/office/word/2010/wordml";

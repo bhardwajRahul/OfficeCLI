@@ -1732,6 +1732,31 @@ public partial class WordHandler
                     if (!string.IsNullOrEmpty(value))
                         tblPr.AppendChild(new TableDescription { Val = value });
                     break;
+                case "direction" or "dir" or "bidi":
+                {
+                    // Table-level bidi: <w:bidiVisual/> on tblPr. CT_TblPrBase
+                    // schema: tblStyle → tblpPr → tblOverlap → bidiVisual → ...
+                    // Mirrors paragraph/cell direction=rtl vocabulary.
+                    // CONSISTENCY(rtl-cascade).
+                    tblPr.RemoveAllChildren<BiDiVisual>();
+                    if (ParseDirectionRtl(value))
+                    {
+                        InsertTblPrChildInOrder(tblPr, new BiDiVisual());
+                    }
+                    break;
+                }
+                case "bidivisual":
+                case "bidivisual.val":
+                {
+                    // Dotted-form fallback: bidiVisual.val=true. Re-insert in
+                    // schema order (must precede tblBorders).
+                    tblPr.RemoveAllChildren<BiDiVisual>();
+                    var bv = new BiDiVisual();
+                    if (key.Equals("bidivisual.val", StringComparison.OrdinalIgnoreCase))
+                        bv.Val = IsTruthy(value) ? OnOffOnlyValues.On : OnOffOnlyValues.Off;
+                    InsertTblPrChildInOrder(tblPr, bv);
+                    break;
+                }
                 case var k when k.StartsWith("border"):
                     ApplyTableBorders(tblPr, key, value);
                     break;

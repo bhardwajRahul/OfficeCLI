@@ -155,6 +155,14 @@ public partial class WordHandler
                     tblProps.RemoveAllChildren<TableLook>();
                     tblProps.AppendChild(new TableLook { Val = "04A0" });
                     break;
+                case "direction" or "dir" or "bidi":
+                    // Table-level bidi: emit <w:bidiVisual/> on tblPr in schema
+                    // order. Mirrors paragraph/cell direction=rtl vocabulary.
+                    // CONSISTENCY(rtl-cascade).
+                    tblProps.RemoveAllChildren<BiDiVisual>();
+                    if (ParseDirectionRtl(tv))
+                        InsertTblPrChildInOrder(tblProps, new BiDiVisual());
+                    break;
             }
         }
 
