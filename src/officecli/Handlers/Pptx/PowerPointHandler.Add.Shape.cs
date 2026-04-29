@@ -103,6 +103,56 @@ public partial class PowerPointHandler
                         var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
                         rProps.Append(new Drawing.LatinFont { Typeface = font });
                         rProps.Append(new Drawing.EastAsianFont { Typeface = font });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                }
+                // Per-script font slots — used for Japanese/Korean/Arabic when
+                // the bare 'font' would clobber an existing scheme. Schema
+                // order is enforced below via ReorderDrawingRunProperties.
+                if (properties.TryGetValue("font.latin", out var fontLatin))
+                {
+                    foreach (var run in newShape.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.LatinFont>();
+                        rProps.Append(new Drawing.LatinFont { Typeface = fontLatin });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                }
+                if (properties.TryGetValue("font.ea", out var fontEa)
+                    || properties.TryGetValue("font.eastasia", out fontEa)
+                    || properties.TryGetValue("font.eastasian", out fontEa))
+                {
+                    foreach (var run in newShape.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.EastAsianFont>();
+                        rProps.Append(new Drawing.EastAsianFont { Typeface = fontEa });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                }
+                if (properties.TryGetValue("font.cs", out var fontCs)
+                    || properties.TryGetValue("font.complexscript", out fontCs)
+                    || properties.TryGetValue("font.complex", out fontCs))
+                {
+                    foreach (var run in newShape.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.ComplexScriptFont>();
+                        rProps.Append(new Drawing.ComplexScriptFont { Typeface = fontCs });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                }
+                // Reading direction (Arabic/Hebrew). 'rtl' enables <a:pPr rtl="1"/>
+                if (properties.TryGetValue("direction", out var dirVal)
+                    || properties.TryGetValue("dir", out dirVal)
+                    || properties.TryGetValue("rtl", out dirVal))
+                {
+                    bool rtl = ParsePptDirectionRtl(dirVal);
+                    foreach (var para in newShape.TextBody?.Elements<Drawing.Paragraph>() ?? Enumerable.Empty<Drawing.Paragraph>())
+                    {
+                        var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
+                        pProps.RightToLeft = rtl;
                     }
                 }
 

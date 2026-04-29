@@ -24,11 +24,43 @@
     },
     "font": {
       "type": "string",
-      "description": "font family (e.g. \"Calibri\", \"SimSun\")",
+      "description": "font family. Bare 'font' targets Latin + EastAsian; for per-script control (Japanese / Korean / Arabic) use font.latin, font.ea, or font.cs.",
       "aliases": ["fontname", "fontFamily"],
       "add": true, "set": true, "get": true,
       "examples": ["--prop font=Calibri"],
       "readback": "font family string",
+      "enforcement": "report"
+    },
+    "font.latin": {
+      "type": "string",
+      "description": "Latin-script font slot (a:latin) only.",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font.latin=Calibri"],
+      "enforcement": "report"
+    },
+    "font.ea": {
+      "type": "string",
+      "description": "East-Asian font slot (a:ea) — Chinese / Japanese / Korean text.",
+      "aliases": ["font.eastasia", "font.eastasian"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font.ea=\"メイリオ\""],
+      "enforcement": "report"
+    },
+    "font.cs": {
+      "type": "string",
+      "description": "Complex-script font slot (a:cs) — Arabic / Hebrew / Thai etc.",
+      "aliases": ["font.complexscript", "font.complex"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font.cs=\"Arabic Typesetting\""],
+      "enforcement": "report"
+    },
+    "direction": {
+      "type": "enum",
+      "values": ["ltr", "rtl"],
+      "description": "paragraph reading direction (a:pPr rtl). Use 'rtl' for Arabic / Hebrew layouts.",
+      "aliases": ["dir", "rtl"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop direction=rtl"],
       "enforcement": "report"
     },
     "size": {

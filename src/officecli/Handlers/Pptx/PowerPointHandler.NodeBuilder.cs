@@ -249,9 +249,14 @@ public partial class PowerPointHandler
                         if (cellFirstRun?.RunProperties != null)
                         {
                             var rp = cellFirstRun.RunProperties;
-                            var cellFont = rp.GetFirstChild<Drawing.LatinFont>()?.Typeface?.Value
-                                ?? rp.GetFirstChild<Drawing.EastAsianFont>()?.Typeface?.Value;
+                            var cellLatin = rp.GetFirstChild<Drawing.LatinFont>()?.Typeface?.Value;
+                            var cellEa = rp.GetFirstChild<Drawing.EastAsianFont>()?.Typeface?.Value;
+                            var cellCs = rp.GetFirstChild<Drawing.ComplexScriptFont>()?.Typeface?.Value;
+                            var cellFont = cellLatin ?? cellEa;
                             if (cellFont != null) cellNode.Format["font"] = cellFont;
+                            if (cellLatin != null && cellLatin != cellFont) cellNode.Format["font.latin"] = cellLatin;
+                            if (cellEa != null && cellEa != cellFont) cellNode.Format["font.ea"] = cellEa;
+                            if (cellCs != null) cellNode.Format["font.cs"] = cellCs;
 
                             if (rp.FontSize?.HasValue == true)
                                 cellNode.Format["size"] = $"{rp.FontSize.Value / 100.0:0.##}pt";
@@ -468,9 +473,17 @@ public partial class PowerPointHandler
         var firstRun = shape.TextBody?.Descendants<Drawing.Run>().FirstOrDefault();
         if (firstRun?.RunProperties != null)
         {
-            var font = firstRun.RunProperties.GetFirstChild<Drawing.LatinFont>()?.Typeface?.Value
-                ?? firstRun.RunProperties.GetFirstChild<Drawing.EastAsianFont>()?.Typeface?.Value;
+            var fontLatinTf = firstRun.RunProperties.GetFirstChild<Drawing.LatinFont>()?.Typeface?.Value;
+            var fontEaTf = firstRun.RunProperties.GetFirstChild<Drawing.EastAsianFont>()?.Typeface?.Value;
+            var fontCsTf = firstRun.RunProperties.GetFirstChild<Drawing.ComplexScriptFont>()?.Typeface?.Value;
+            var font = fontLatinTf ?? fontEaTf;
             if (font != null) node.Format["font"] = font;
+            // Per-script slots — only emit when present (writers asking for
+            // round-trip can rebuild the same XML). Skip the redundant
+            // `font.latin` when it equals bare `font` to keep readback terse.
+            if (fontLatinTf != null && fontLatinTf != font) node.Format["font.latin"] = fontLatinTf;
+            if (fontEaTf != null && fontEaTf != font) node.Format["font.ea"] = fontEaTf;
+            if (fontCsTf != null) node.Format["font.cs"] = fontCsTf;
 
             var fontSize = firstRun.RunProperties.FontSize?.Value;
             if (fontSize.HasValue) node.Format["size"] = $"{fontSize.Value / 100.0:0.##}pt";
@@ -749,6 +762,10 @@ public partial class PowerPointHandler
             if (pProps.Indent?.HasValue == true) node.Format["indent"] = FormatEmu(pProps.Indent.Value);
             if (pProps.LeftMargin?.HasValue == true) node.Format["marginLeft"] = FormatEmu(pProps.LeftMargin.Value);
             if (pProps.RightMargin?.HasValue == true) node.Format["marginRight"] = FormatEmu(pProps.RightMargin.Value);
+            // Reading direction (Arabic / Hebrew). Only emit when explicitly
+            // set so LTR docs don't get a noisy `direction=ltr` everywhere.
+            if (pProps.RightToLeft?.HasValue == true)
+                node.Format["direction"] = pProps.RightToLeft.Value ? "rtl" : "ltr";
         }
 
         // Count paragraphs regardless of depth
@@ -789,6 +806,8 @@ public partial class PowerPointHandler
                     if (paraPProps?.Indent?.HasValue == true) paraNode.Format["indent"] = FormatEmu(paraPProps.Indent.Value);
                     if (paraPProps?.LeftMargin?.HasValue == true) paraNode.Format["marginLeft"] = FormatEmu(paraPProps.LeftMargin.Value);
                     if (paraPProps?.RightMargin?.HasValue == true) paraNode.Format["marginRight"] = FormatEmu(paraPProps.RightMargin.Value);
+                    if (paraPProps?.RightToLeft?.HasValue == true)
+                        paraNode.Format["direction"] = paraPProps.RightToLeft.Value ? "rtl" : "ltr";
                     var pLsPct = paraPProps?.GetFirstChild<Drawing.LineSpacing>()?.GetFirstChild<Drawing.SpacingPercent>()?.Val?.Value;
                     if (pLsPct.HasValue) paraNode.Format["lineSpacing"] = SpacingConverter.FormatPptLineSpacingPercent(pLsPct.Value);
                     var pLsPts = paraPProps?.GetFirstChild<Drawing.LineSpacing>()?.GetFirstChild<Drawing.SpacingPoints>()?.Val?.Value;
@@ -837,9 +856,14 @@ public partial class PowerPointHandler
 
         if (run.RunProperties != null)
         {
-            var f = run.RunProperties.GetFirstChild<Drawing.LatinFont>()?.Typeface?.Value
-                ?? run.RunProperties.GetFirstChild<Drawing.EastAsianFont>()?.Typeface?.Value;
+            var fLatin = run.RunProperties.GetFirstChild<Drawing.LatinFont>()?.Typeface?.Value;
+            var fEa = run.RunProperties.GetFirstChild<Drawing.EastAsianFont>()?.Typeface?.Value;
+            var fCs = run.RunProperties.GetFirstChild<Drawing.ComplexScriptFont>()?.Typeface?.Value;
+            var f = fLatin ?? fEa;
             if (f != null) node.Format["font"] = f;
+            if (fLatin != null && fLatin != f) node.Format["font.latin"] = fLatin;
+            if (fEa != null && fEa != f) node.Format["font.ea"] = fEa;
+            if (fCs != null) node.Format["font.cs"] = fCs;
             var fs = run.RunProperties.FontSize?.Value;
             if (fs.HasValue) node.Format["size"] = $"{fs.Value / 100.0:0.##}pt";
             if (run.RunProperties.Bold?.Value == true) node.Format["bold"] = true;

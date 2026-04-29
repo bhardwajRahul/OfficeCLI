@@ -197,11 +197,47 @@
     },
     "font": {
       "type": "string",
-      "description": "default font family for shape text.",
+      "description": "default font family for shape text. Bare 'font' targets Latin + EastAsian; for per-script control (Japanese / Korean / Arabic) use font.latin, font.ea, or font.cs.",
       "aliases": ["font.name"],
       "add": true, "set": true, "get": true,
       "examples": ["--prop font=Arial"],
       "readback": "font name",
+      "enforcement": "report"
+    },
+    "font.latin": {
+      "type": "string",
+      "description": "Latin-script font slot only (a:latin). Use to target ASCII/European text without overwriting CJK / complex-script slots.",
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font.latin=Calibri"],
+      "readback": "typeface (only emitted when it differs from the bare 'font' slot)",
+      "enforcement": "report"
+    },
+    "font.ea": {
+      "type": "string",
+      "description": "East-Asian font slot (a:ea) — Chinese / Japanese / Korean text.",
+      "aliases": ["font.eastasia", "font.eastasian"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font.ea=\"メイリオ\""],
+      "readback": "typeface (only emitted when it differs from the bare 'font' slot)",
+      "enforcement": "report"
+    },
+    "font.cs": {
+      "type": "string",
+      "description": "Complex-script font slot (a:cs) — Arabic / Hebrew / Thai etc.",
+      "aliases": ["font.complexscript", "font.complex"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop font.cs=\"Arabic Typesetting\""],
+      "readback": "typeface",
+      "enforcement": "report"
+    },
+    "direction": {
+      "type": "enum",
+      "values": ["ltr", "rtl"],
+      "description": "paragraph reading direction (a:pPr rtl). Use 'rtl' for Arabic / Hebrew layouts.",
+      "aliases": ["dir", "rtl"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop direction=rtl"],
+      "readback": "rtl | ltr (only emitted when explicitly set)",
       "enforcement": "report"
     },
     "underline": {

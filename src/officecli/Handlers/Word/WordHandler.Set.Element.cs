@@ -940,6 +940,25 @@ public partial class WordHandler
             var k = key.ToLowerInvariant();
             if (ApplyParagraphLevelProperty(pProps, key, value))
             {
+                // CONSISTENCY(rtl-cascade): a paragraph-level <w:bidi/> only
+                // flips layout (page side, mark anchor); it does NOT make the
+                // run-internal character order RTL. Word's UI also writes
+                // <w:rtl/> on every run and on the paragraph mark when the
+                // user toggles paragraph direction. Mirror that here so a
+                // single `direction=rtl` produces a fully Arabic-correct
+                // paragraph instead of a mixed-bidi one that renders wrong
+                // for fonts like Arabic Typesetting.
+                if (k is "direction" or "dir" or "bidi")
+                {
+                    bool runRtl = ParseDirectionRtl(value);
+                    var markRPr = pProps.ParagraphMarkRunProperties ?? pProps.AppendChild(new ParagraphMarkRunProperties());
+                    ApplyRunFormatting(markRPr, "rtl", runRtl ? "true" : "false");
+                    foreach (var pRun in para.Descendants<Run>())
+                    {
+                        var pRunProps = EnsureRunProperties(pRun);
+                        ApplyRunFormatting(pRunProps, "rtl", runRtl ? "true" : "false");
+                    }
+                }
                 // handled by paragraph-level helper
             }
             else switch (k)
@@ -962,7 +981,9 @@ public partial class WordHandler
                 case "start":
                     SetListStartValue(para, ParseHelpers.SafeParseInt(value, "start"));
                     break;
-                case "size" or "font" or "bold" or "italic" or "color" or "highlight" or "underline" or "strike":
+                case "size" or "font" or "bold" or "italic" or "color" or "highlight" or "underline" or "strike"
+                  or "bold.cs" or "italic.cs" or "size.cs"
+                  or "font.bold.cs" or "font.italic.cs" or "font.size.cs":
                     // Apply run-level formatting to all runs in the paragraph
                     var allParaRuns = para.Descendants<Run>().ToList();
                     // Also update paragraph mark run properties (rPr inside pPr)

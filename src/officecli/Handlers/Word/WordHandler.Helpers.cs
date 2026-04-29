@@ -974,19 +974,58 @@ public partial class WordHandler
                 return true;
             case "font":
             case "font.name":
+                // Bare 'font' targets ASCII+HighAnsi+EastAsia. Use 'font.latin',
+                // 'font.ea', 'font.cs' for per-script control (e.g. Japanese,
+                // Korean, Arabic — the CS slot owns Arabic/Hebrew typefaces).
                 var existingRf = props.GetFirstChild<RunFonts>();
                 if (existingRf != null) { existingRf.Ascii = value; existingRf.HighAnsi = value; existingRf.EastAsia = value; }
                 else InsertRunPropInSchemaOrder(props, new RunFonts { Ascii = value, HighAnsi = value, EastAsia = value });
+                return true;
+            case "font.latin":
+                var rfLatin = props.GetFirstChild<RunFonts>();
+                if (rfLatin != null) { rfLatin.Ascii = value; rfLatin.HighAnsi = value; }
+                else InsertRunPropInSchemaOrder(props, new RunFonts { Ascii = value, HighAnsi = value });
+                return true;
+            case "font.ea" or "font.eastasia" or "font.eastasian":
+                var rfEa = props.GetFirstChild<RunFonts>();
+                if (rfEa != null) { rfEa.EastAsia = value; }
+                else InsertRunPropInSchemaOrder(props, new RunFonts { EastAsia = value });
+                return true;
+            case "font.cs" or "font.complexscript" or "font.complex":
+                var rfCs = props.GetFirstChild<RunFonts>();
+                if (rfCs != null) { rfCs.ComplexScript = value; }
+                else InsertRunPropInSchemaOrder(props, new RunFonts { ComplexScript = value });
                 return true;
             case "bold":
             case "font.bold":
                 props.RemoveAllChildren<Bold>();
                 if (IsTruthy(value)) InsertRunPropInSchemaOrder(props, new Bold());
                 return true;
+            case "bold.cs" or "font.bold.cs" or "boldcs":
+                // Complex-script bold (<w:bCs/>). Word renders Arabic / Hebrew
+                // bold via this flag, NOT <w:b/>. Required for Arabic bold to
+                // actually render as bold.
+                props.RemoveAllChildren<BoldComplexScript>();
+                if (IsTruthy(value)) InsertRunPropInSchemaOrder(props, new BoldComplexScript());
+                return true;
             case "italic":
             case "font.italic":
                 props.RemoveAllChildren<Italic>();
                 if (IsTruthy(value)) InsertRunPropInSchemaOrder(props, new Italic());
+                return true;
+            case "italic.cs" or "font.italic.cs" or "italiccs":
+                // Complex-script italic (<w:iCs/>). Same rationale as bold.cs —
+                // Arabic / Hebrew italic ignores <w:i/>.
+                props.RemoveAllChildren<ItalicComplexScript>();
+                if (IsTruthy(value)) InsertRunPropInSchemaOrder(props, new ItalicComplexScript());
+                return true;
+            case "size.cs" or "font.size.cs" or "sizecs":
+                // Complex-script font size (<w:szCs/>, half-points). When set,
+                // Arabic / Hebrew renders at this size; <w:sz/> only affects
+                // Latin runs. Bare 'size' continues to write <w:sz/> only —
+                // see CONSISTENCY(cs-explicit) in the bare-size case above.
+                props.RemoveAllChildren<FontSizeComplexScript>();
+                InsertRunPropInSchemaOrder(props, new FontSizeComplexScript { Val = ((int)Math.Round(ParseFontSize(value) * 2, MidpointRounding.AwayFromZero)).ToString() });
                 return true;
             case "color":
             case "font.color":
@@ -1047,8 +1086,19 @@ public partial class WordHandler
                 if (IsTruthy(value)) InsertRunPropInSchemaOrder(props, new NoProof());
                 return true;
             case "rtl":
+            case "direction" or "dir":
+                // 'direction=rtl|ltr' is the canonical key (mirrors paragraph
+                // and PPT); 'rtl=true|false' kept as legacy boolean alias.
                 props.RemoveAllChildren<RightToLeftText>();
-                if (IsTruthy(value)) InsertRunPropInSchemaOrder(props, new RightToLeftText());
+                bool rtlOn = key.ToLowerInvariant() == "rtl"
+                    ? IsTruthy(value)
+                    : value.ToLowerInvariant() switch
+                    {
+                        "rtl" or "righttoleft" or "right-to-left" or "true" or "1" => true,
+                        "ltr" or "lefttoright" or "left-to-right" or "false" or "0" or "" => false,
+                        _ => throw new ArgumentException($"Invalid direction value: '{value}'. Valid values: rtl, ltr.")
+                    };
+                if (rtlOn) InsertRunPropInSchemaOrder(props, new RightToLeftText());
                 return true;
             case "charspacing" or "letterspacing" or "spacing":
                 var csPt = value.EndsWith("pt", StringComparison.OrdinalIgnoreCase)

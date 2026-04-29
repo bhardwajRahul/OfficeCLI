@@ -86,10 +86,14 @@ public static class BlankDocCreator
 
         mainPart.Document = new Document(new Body(sectPr));
 
-        // docDefaults: align with Microsoft Word / LibreOffice convention.
-        // rPrDefault provides fallback fonts so ASCII/CJK characters render at
-        // predictable widths even when a run only specifies eastAsia. Without it
-        // ASCII chars fall back to a system-dependent font, breaking layout.
+        // docDefaults: align with POI / LibreOffice convention — do not bake
+        // locale-specific defaults (e.g. eastAsia = "宋体" or cs = "Arabic
+        // Typesetting") into a fresh document. Leaving the eastAsia / cs
+        // slots empty lets the host application substitute its UI-locale
+        // default font, so the same blank doc renders correctly for
+        // Chinese / Japanese / Korean / Arabic users without us guessing.
+        // Ascii/HighAnsi stay as Times New Roman so plain ASCII has a
+        // predictable, system-independent baseline.
         // pPrDefault is left empty — schema defaults (autoSpaceDE/DN/kinsoku/
         // overflowPunct = true) match Word's behaviour and CJK ⇄ Latin spacing.
         var stylesPart = mainPart.AddNewPart<DocumentFormat.OpenXml.Packaging.StyleDefinitionsPart>();
@@ -101,8 +105,6 @@ public static class BlankDocCreator
                         {
                             Ascii = "Times New Roman",
                             HighAnsi = "Times New Roman",
-                            EastAsia = "宋体",
-                            ComplexScript = "Times New Roman",
                         }
                     )
                 ),

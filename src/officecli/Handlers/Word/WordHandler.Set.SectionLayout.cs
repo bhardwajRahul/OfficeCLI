@@ -71,22 +71,23 @@ public partial class WordHandler
             case "pagenumfmt" or "pagenumberformat" or "pagenumberfmt":
             {
                 var sectPr = EnsureSectionProperties();
-                var fmt = value.ToLowerInvariant() switch
-                {
-                    "decimal" => NumberFormatValues.Decimal,
-                    "lowerroman" => NumberFormatValues.LowerRoman,
-                    "upperroman" => NumberFormatValues.UpperRoman,
-                    "lowerletter" => NumberFormatValues.LowerLetter,
-                    "upperletter" => NumberFormatValues.UpperLetter,
-                    _ => throw new ArgumentException($"Invalid pageNumFmt: '{value}'. Valid: decimal, lowerRoman, upperRoman, lowerLetter, upperLetter.")
-                };
                 var pgNum = sectPr.GetFirstChild<PageNumberType>();
                 if (pgNum == null)
                 {
                     pgNum = new PageNumberType();
                     sectPr.AppendChild(pgNum);
                 }
-                pgNum.Format = fmt;
+                pgNum.Format = ParseNumberFormat(value);
+                return true;
+            }
+            case "direction" or "dir" or "bidi":
+            {
+                // CONSISTENCY(section-layout-fallback): mirrors the per-section
+                // dispatch case in Set.Dispatch.cs. <w:bidi/> in sectPr flips
+                // page direction for Arabic / Hebrew layouts.
+                var sectPr = EnsureSectionProperties();
+                sectPr.RemoveAllChildren<BiDi>();
+                if (ParseDirectionRtl(value)) sectPr.AppendChild(new BiDi());
                 return true;
             }
             case "pagestart" or "pagenumberstart" or "pagenumstart":

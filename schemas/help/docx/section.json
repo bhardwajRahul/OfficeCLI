@@ -111,12 +111,22 @@
     },
     "pageNumFmt": {
       "type": "enum",
-      "description": "page-number numeric format (writes w:pgNumType/@w:fmt).",
-      "values": ["decimal", "lowerRoman", "upperRoman", "lowerLetter", "upperLetter"],
+      "description": "page-number numeric format (writes w:pgNumType/@w:fmt). Common: decimal / lowerRoman / upperRoman / lowerLetter / upperLetter. Locale-specific: hindiNumbers / hindiVowels / arabicAlpha / arabicAbjad / thaiCounting / chineseCounting / japaneseCounting / koreanCounting / ideographDigital. Use 'hindiNumbers' for Indic-Arabic numerals (٠١٢٣) common in Arabic documents.",
+      "values": ["decimal", "lowerRoman", "upperRoman", "lowerLetter", "upperLetter", "hindiNumbers", "hindiVowels", "hindiConsonants", "hindiCounting", "arabicAlpha", "arabicAbjad", "thaiNumbers", "thaiLetters", "thaiCounting", "chineseCounting", "chineseCountingThousand", "chineseLegalSimplified", "japaneseCounting", "japaneseLegal", "japaneseDigitalTen", "koreanCounting", "koreanLegal", "koreanDigital", "ideographDigital", "ideographTraditional", "ideographZodiac", "none"],
       "aliases": ["pagenumfmt", "pagenumberformat", "pagenumberfmt"],
       "add": false, "set": true, "get": true,
-      "examples": ["--prop pageNumFmt=lowerRoman"],
+      "examples": ["--prop pageNumFmt=lowerRoman", "--prop pageNumFmt=hindiNumbers"],
       "readback": "innerText of NumberFormatValues",
+      "enforcement": "strict"
+    },
+    "direction": {
+      "type": "enum",
+      "values": ["ltr", "rtl"],
+      "description": "section reading direction (writes <w:bidi/> on sectPr). Flips page side, header/footer anchors, and gutter for Arabic / Hebrew documents. Apply at section level alongside paragraph-level direction for a fully RTL document.",
+      "aliases": ["dir", "bidi"],
+      "add": false, "set": true, "get": true,
+      "examples": ["--prop direction=rtl"],
+      "readback": "rtl (only emitted when sectPr/<w:bidi/> is present)",
       "enforcement": "strict"
     },
     "pageStart": {

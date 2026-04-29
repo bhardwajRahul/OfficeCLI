@@ -793,6 +793,10 @@ public partial class WordHandler
         if (sectPr.GetFirstChild<TitlePage>() != null)
             secNode.Format["titlePage"] = true;
 
+        // Section-level RTL (Arabic / Hebrew page direction).
+        if (sectPr.GetFirstChild<BiDi>() != null)
+            secNode.Format["direction"] = "rtl";
+
         // Header / footer references — expose so users can debug inheritance
         var mainPart = _doc.MainDocumentPart;
         if (mainPart != null)

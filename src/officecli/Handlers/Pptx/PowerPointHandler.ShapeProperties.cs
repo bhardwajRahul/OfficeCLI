@@ -195,6 +195,10 @@ public partial class PowerPointHandler
 
                 case "font":
                 case "font.name":
+                    // Bare 'font' targets Latin + EastAsian (and clears any
+                    // prior CS so users get a single coherent typeface).
+                    // For per-script control use 'font.latin' / 'font.ea' /
+                    // 'font.cs' below (Japanese / Korean / Arabic etc).
                     foreach (var run in runs)
                     {
                         var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
@@ -203,6 +207,37 @@ public partial class PowerPointHandler
                         rProps.RemoveAllChildren<Drawing.ComplexScriptFont>();
                         rProps.Append(new Drawing.LatinFont { Typeface = value });
                         rProps.Append(new Drawing.EastAsianFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                    break;
+
+                case "font.latin":
+                    foreach (var run in runs)
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.LatinFont>();
+                        rProps.Append(new Drawing.LatinFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                    break;
+
+                case "font.ea" or "font.eastasia" or "font.eastasian":
+                    foreach (var run in runs)
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.EastAsianFont>();
+                        rProps.Append(new Drawing.EastAsianFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                    break;
+
+                case "font.cs" or "font.complexscript" or "font.complex":
+                    foreach (var run in runs)
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.ComplexScriptFont>();
+                        rProps.Append(new Drawing.ComplexScriptFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
                     }
                     break;
 
@@ -392,6 +427,21 @@ public partial class PowerPointHandler
                     {
                         var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
                         pProps.Alignment = alignment;
+                    }
+                    break;
+                }
+
+                case "direction" or "dir" or "rtl":
+                {
+                    // Paragraph reading direction (Arabic / Hebrew). Maps to
+                    // <a:pPr rtl="1"/>. Bare 'rtl' kept for parity with Word.
+                    bool rtl = key.ToLowerInvariant() == "rtl"
+                        ? IsTruthy(value)
+                        : ParsePptDirectionRtl(value);
+                    foreach (var para in shape.TextBody?.Elements<Drawing.Paragraph>() ?? Enumerable.Empty<Drawing.Paragraph>())
+                    {
+                        var pProps = para.ParagraphProperties ?? (para.ParagraphProperties = new Drawing.ParagraphProperties());
+                        pProps.RightToLeft = rtl;
                     }
                     break;
                 }
@@ -1162,6 +1212,37 @@ public partial class PowerPointHandler
                         rProps.RemoveAllChildren<Drawing.EastAsianFont>();
                         rProps.Append(new Drawing.LatinFont { Typeface = value });
                         rProps.Append(new Drawing.EastAsianFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                    break;
+                case "font.latin":
+                    EnsureTableCellHasRun(cell);
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.LatinFont>();
+                        rProps.Append(new Drawing.LatinFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                    break;
+                case "font.ea" or "font.eastasia" or "font.eastasian":
+                    EnsureTableCellHasRun(cell);
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.EastAsianFont>();
+                        rProps.Append(new Drawing.EastAsianFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                    break;
+                case "font.cs" or "font.complexscript" or "font.complex":
+                    EnsureTableCellHasRun(cell);
+                    foreach (var run in cell.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.ComplexScriptFont>();
+                        rProps.Append(new Drawing.ComplexScriptFont { Typeface = value });
+                        ReorderDrawingRunProperties(rProps);
                     }
                     break;
                 case "size":

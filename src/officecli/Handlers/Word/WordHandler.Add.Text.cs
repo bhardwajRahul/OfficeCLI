@@ -31,6 +31,21 @@ public partial class WordHandler
             pProps.ParagraphStyleId = new ParagraphStyleId { Val = ResolveStyleIdFromName(styleName) ?? styleName };
         if (properties.TryGetValue("alignment", out var alignment) || properties.TryGetValue("align", out alignment))
             pProps.Justification = new Justification { Val = ParseJustification(alignment) };
+        // Reading direction (Arabic / Hebrew). 'rtl' enables <w:bidi/> AND
+        // writes <w:rtl/> on the paragraph mark (so any later runs added
+        // via Set inherit the run-level direction without a separate flag).
+        // CONSISTENCY(rtl-cascade): mirrors SetElementParagraph — direction
+        // is a paragraph-scope shorthand for "this paragraph is fully RTL".
+        bool? paraRtl = null;
+        if (properties.TryGetValue("direction", out var dirRaw)
+            || properties.TryGetValue("dir", out dirRaw)
+            || properties.TryGetValue("bidi", out dirRaw))
+        {
+            paraRtl = ParseDirectionRtl(dirRaw);
+            if (paraRtl.Value) pProps.BiDi = new BiDi();
+            var markRPr = pProps.ParagraphMarkRunProperties ?? pProps.AppendChild(new ParagraphMarkRunProperties());
+            ApplyRunFormatting(markRPr, "rtl", paraRtl.Value ? "true" : "false");
+        }
         if (properties.TryGetValue("firstlineindent", out var indent) || properties.TryGetValue("firstLineIndent", out indent))
         {
             // Lenient input: accept "2cm", "0.5in", "18pt", or bare twips (backward compat).
@@ -233,8 +248,24 @@ public partial class WordHandler
             }
             if ((properties.TryGetValue("bold", out var bold) || properties.TryGetValue("font.bold", out bold)) && IsTruthy(bold))
                 rProps.Bold = new Bold();
+            if ((properties.TryGetValue("bold.cs", out var boldCs)
+                    || properties.TryGetValue("font.bold.cs", out boldCs))
+                && IsTruthy(boldCs))
+                rProps.BoldComplexScript = new BoldComplexScript();
             if ((properties.TryGetValue("italic", out var pItalic) || properties.TryGetValue("font.italic", out pItalic)) && IsTruthy(pItalic))
                 rProps.Italic = new Italic();
+            if ((properties.TryGetValue("italic.cs", out var italicCs)
+                    || properties.TryGetValue("font.italic.cs", out italicCs))
+                && IsTruthy(italicCs))
+                rProps.ItalicComplexScript = new ItalicComplexScript();
+            if (properties.TryGetValue("size.cs", out var sizeCs)
+                || properties.TryGetValue("font.size.cs", out sizeCs))
+            {
+                rProps.FontSizeComplexScript = new FontSizeComplexScript
+                {
+                    Val = ((int)Math.Round(ParseFontSize(sizeCs) * 2, MidpointRounding.AwayFromZero)).ToString()
+                };
+            }
             if (properties.TryGetValue("color", out var pColor) || properties.TryGetValue("font.color", out pColor))
                 rProps.Color = new Color { Val = SanitizeHex(pColor) };
             if (properties.TryGetValue("underline", out var pUnderline) || properties.TryGetValue("font.underline", out pUnderline))
@@ -273,7 +304,12 @@ public partial class WordHandler
                 rProps.Imprint = new Imprint();
             if (properties.TryGetValue("noproof", out var pNoProof) && IsTruthy(pNoProof))
                 rProps.NoProof = new NoProof();
+            // Run-level rtl: explicit `rtl=true` OR cascaded from paragraph
+            // direction=rtl above. Skipping the cascade would leave Latin
+            // character order inside an RTL paragraph (broken Arabic).
             if (properties.TryGetValue("rtl", out var pRtl) && IsTruthy(pRtl))
+                rProps.RightToLeftText = new RightToLeftText();
+            else if (paraRtl == true)
                 rProps.RightToLeftText = new RightToLeftText();
             if (properties.TryGetValue("vertAlign", out var pVertAlign) || properties.TryGetValue("vertalign", out pVertAlign))
             {

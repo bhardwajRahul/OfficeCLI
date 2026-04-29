@@ -225,6 +225,12 @@ internal class ExcelStyleManager
         // as shorthand for `alignment.readingOrder`.
         if (styleProps.TryGetValue("readingorder", out var roVal))
             alignProps["readingorder"] = roVal;
+        // CONSISTENCY(direction): mirror Word/PPT canonical key 'direction'
+        // (values: ltr / rtl / context) for cross-handler parity.
+        if (styleProps.TryGetValue("direction", out var dirVal))
+            alignProps["readingorder"] = dirVal;
+        if (styleProps.TryGetValue("dir", out var dirVal2))
+            alignProps["readingorder"] = dirVal2;
         if (alignProps.Count > 0)
         {
             alignment ??= new Alignment();
@@ -516,6 +522,7 @@ internal class ExcelStyleManager
             or "rotation" or "indent" or "shrinktofit"
             or "locked" or "formulahidden"
             || lower == "readingorder"
+            || lower == "direction" || lower == "dir"
             || lower == "quoteprefix"
             || lower.StartsWith("font.")
             || lower.StartsWith("alignment.")

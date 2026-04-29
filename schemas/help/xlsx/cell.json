@@ -136,6 +136,15 @@
       "examples": ["--prop alignment.wrapText=true"],
       "enforcement": "report"
     },
+    "alignment.readingOrder": {
+      "type": "enum",
+      "values": ["context", "ltr", "rtl"],
+      "description": "cell text reading direction (OOXML 0=context, 1=ltr, 2=rtl). Use 'rtl' for Arabic / Hebrew, 'ltr' to force left-to-right, 'context' (default) to derive from content.",
+      "aliases": ["readingorder", "readingOrder", "direction", "dir"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop alignment.readingOrder=rtl", "--prop direction=rtl"],
+      "enforcement": "report"
+    },
     "merge": {
       "type": "string",
       "description": "merge range applied post-cell-creation (parity with `set`). Accepts a single A1 range (A1:C3) or comma-separated ranges (A1:B1,A2:B2). Use merge=false to clear an existing merge anchored at this cell (aliases: unmerge, none, empty).",

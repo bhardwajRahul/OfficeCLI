@@ -652,9 +652,69 @@ public partial class WordHandler
             case "border.all" or "border" or "border.top" or "border.bottom" or "border.left" or "border.right" or "border.between" or "border.bar":
                 ApplyParagraphBorders(pProps, key, value);
                 return true;
+            // Reading direction: "rtl" enables right-to-left layout for Arabic
+            // / Hebrew, "ltr" removes the bidi flag. Maps to <w:bidi/> in pPr.
+            case "direction" or "dir" or "bidi":
+                pProps.BiDi = ParseDirectionRtl(value) ? new BiDi() : null;
+                return true;
             default:
                 return false;
         }
+    }
+
+    private static bool ParseDirectionRtl(string value) => value.ToLowerInvariant() switch
+    {
+        "rtl" or "righttoleft" or "right-to-left" or "true" or "1" => true,
+        "ltr" or "lefttoright" or "left-to-right" or "false" or "0" or "" => false,
+        _ => throw new ArgumentException($"Invalid direction value: '{value}'. Valid values: rtl, ltr.")
+    };
+
+    /// <summary>
+    /// Parse a w:numFmt value (page numbering / list numbering). Accepts the
+    /// common Latin / Roman / Letter forms plus locale-specific scripts —
+    /// notably 'arabicAlpha' / 'arabicAbjad' / 'hindiVowels' / 'hindiNumbers'
+    /// for Arabic-script documents, and CJK ideographic forms for Chinese /
+    /// Japanese / Korean. Falls through to the OOXML enum constructor so the
+    /// full ECMA-376 set (chicago, persian, thaiCounting, etc.) round-trips.
+    /// </summary>
+    private static EnumValue<NumberFormatValues> ParseNumberFormat(string value)
+    {
+        var lower = value.ToLowerInvariant();
+        return lower switch
+        {
+            "decimal" => NumberFormatValues.Decimal,
+            "lowerroman" => NumberFormatValues.LowerRoman,
+            "upperroman" => NumberFormatValues.UpperRoman,
+            "lowerletter" => NumberFormatValues.LowerLetter,
+            "upperletter" => NumberFormatValues.UpperLetter,
+            "arabicalpha" => NumberFormatValues.ArabicAlpha,
+            "arabicabjad" => NumberFormatValues.ArabicAbjad,
+            "hindivowels" => NumberFormatValues.HindiVowels,
+            "hindiconsonants" => NumberFormatValues.HindiConsonants,
+            "hindinumbers" => NumberFormatValues.HindiNumbers,
+            "hindicounting" => NumberFormatValues.HindiCounting,
+            "thailetters" => NumberFormatValues.ThaiLetters,
+            "thainumbers" => NumberFormatValues.ThaiNumbers,
+            "thaicounting" => NumberFormatValues.ThaiCounting,
+            "chinesecounting" => NumberFormatValues.ChineseCounting,
+            "chinesecountingthousand" => NumberFormatValues.ChineseCountingThousand,
+            "chineselegalsimplified" => NumberFormatValues.ChineseLegalSimplified,
+            "japanesecounting" => NumberFormatValues.JapaneseCounting,
+            "japaneselegal" => NumberFormatValues.JapaneseLegal,
+            "japanesedigitalten" => NumberFormatValues.JapaneseDigitalTenThousand,
+            "koreancounting" => NumberFormatValues.KoreanCounting,
+            "koreanlegal" => NumberFormatValues.KoreanLegal,
+            "koreandigital" => NumberFormatValues.KoreanDigital,
+            "ideographdigital" => NumberFormatValues.IdeographDigital,
+            "ideographtraditional" => NumberFormatValues.IdeographTraditional,
+            "ideographzodiac" => NumberFormatValues.IdeographZodiac,
+            "none" => NumberFormatValues.None,
+            _ => throw new ArgumentException(
+                $"Invalid pageNumFmt: '{value}'. Common values: decimal, lowerRoman, upperRoman, "
+                + "lowerLetter, upperLetter. Locale-specific: hindiNumbers, hindiVowels, arabicAlpha, "
+                + "arabicAbjad, thaiCounting, chineseCounting, japaneseCounting, koreanCounting, "
+                + "ideographDigital, none.")
+        };
     }
 
 

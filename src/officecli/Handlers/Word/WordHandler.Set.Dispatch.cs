@@ -714,23 +714,23 @@ public partial class WordHandler
                 }
                 case "pagenumfmt" or "pagenumberformat" or "pagenumberfmt":
                 {
-                    var lower = value.ToLowerInvariant();
-                    var fmt = lower switch
-                    {
-                        "decimal" => NumberFormatValues.Decimal,
-                        "lowerroman" => NumberFormatValues.LowerRoman,
-                        "upperroman" => NumberFormatValues.UpperRoman,
-                        "lowerletter" => NumberFormatValues.LowerLetter,
-                        "upperletter" => NumberFormatValues.UpperLetter,
-                        _ => throw new ArgumentException($"Invalid pageNumFmt: '{value}'. Valid: decimal, lowerRoman, upperRoman, lowerLetter, upperLetter.")
-                    };
                     var pgNum = sectPr.GetFirstChild<PageNumberType>();
                     if (pgNum == null)
                     {
                         pgNum = new PageNumberType();
                         sectPr.AppendChild(pgNum);
                     }
-                    pgNum.Format = fmt;
+                    pgNum.Format = ParseNumberFormat(value);
+                    break;
+                }
+                case "direction" or "dir" or "bidi":
+                {
+                    // Section-level RTL: <w:bidi/> in sectPr flips the page
+                    // (margin gutter, header/footer anchors, page-number side).
+                    // Required for visually-correct Arabic / Hebrew documents
+                    // alongside paragraph-level direction.
+                    sectPr.RemoveAllChildren<BiDi>();
+                    if (ParseDirectionRtl(value)) sectPr.AppendChild(new BiDi());
                     break;
                 }
                 case "titlepage" or "titlepg":

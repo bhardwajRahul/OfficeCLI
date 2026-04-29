@@ -589,6 +589,13 @@ public partial class PowerPointHandler
 
     private static long ParseEmu(string value) => Core.EmuConverter.ParseEmu(value);
 
+    private static bool ParsePptDirectionRtl(string value) => value.ToLowerInvariant() switch
+    {
+        "rtl" or "righttoleft" or "right-to-left" or "true" or "1" => true,
+        "ltr" or "lefttoright" or "left-to-right" or "false" or "0" or "" => false,
+        _ => throw new ArgumentException($"Invalid direction value: '{value}'. Valid values: rtl, ltr.")
+    };
+
     private static string FormatEmu(long emu) => Core.EmuConverter.FormatEmu(emu);
 
     private static string FormatLineWidth(long emu) => Core.EmuConverter.FormatLineWidth(emu);
@@ -1432,10 +1439,29 @@ public partial class PowerPointHandler
                 rPr.PrependChild(BuildSolidFill(value));
                 break;
             case "font":
+                // Bare 'font' targets all common scripts (Latin + EastAsian).
+                // Use 'font.latin' / 'font.ea' / 'font.cs' for per-script control
+                // (e.g. Japanese / Korean / Arabic documents).
                 rPr.RemoveAllChildren<Drawing.LatinFont>();
                 rPr.RemoveAllChildren<Drawing.EastAsianFont>();
                 rPr.AppendChild(new Drawing.LatinFont { Typeface = value });
                 rPr.AppendChild(new Drawing.EastAsianFont { Typeface = value });
+                ReorderDrawingRunProperties(rPr);
+                break;
+            case "font.latin":
+                rPr.RemoveAllChildren<Drawing.LatinFont>();
+                rPr.AppendChild(new Drawing.LatinFont { Typeface = value });
+                ReorderDrawingRunProperties(rPr);
+                break;
+            case "font.ea" or "font.eastasia" or "font.eastasian":
+                rPr.RemoveAllChildren<Drawing.EastAsianFont>();
+                rPr.AppendChild(new Drawing.EastAsianFont { Typeface = value });
+                ReorderDrawingRunProperties(rPr);
+                break;
+            case "font.cs" or "font.complexscript" or "font.complex":
+                rPr.RemoveAllChildren<Drawing.ComplexScriptFont>();
+                rPr.AppendChild(new Drawing.ComplexScriptFont { Typeface = value });
+                ReorderDrawingRunProperties(rPr);
                 break;
             case "underline":
                 var ulVal = value.ToLowerInvariant() switch
