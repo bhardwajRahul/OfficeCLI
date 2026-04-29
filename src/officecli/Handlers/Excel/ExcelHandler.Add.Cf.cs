@@ -32,7 +32,16 @@ public partial class ExcelHandler
             "iconset" => Add(parentPath, "iconset", position, properties),
             "colorscale" => Add(parentPath, "colorscale", position, properties),
             "formula" or "expression" => Add(parentPath, "formulacf", position, properties),
+            // `highlight` is Excel's UI label for the "Highlight Cells Rules"
+            // category (Greater Than / Less Than / Between / Equal To / etc.),
+            // all of which are `cellIs` rules underneath. When the property
+            // bag carries an operator+value pair, treat `highlight` as a
+            // friendly alias for `cellIs` so users can transcribe the UI
+            // vocabulary directly. Without an operator the rule is ambiguous
+            // and we still reject below.
             "cellis" => Add(parentPath, "cellis", position, properties),
+            "highlight" when properties.ContainsKey("operator")
+                => Add(parentPath, "cellis", position, properties),
             // R39-1: `top` / `topPercent` / `bottom` / `bottomPercent` are
             // user-facing aliases for the OOXML `top10` cfRule. Without this
             // mapping, the dispatch fell through to the default `databar`

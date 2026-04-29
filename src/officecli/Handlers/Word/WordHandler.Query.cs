@@ -866,15 +866,17 @@ public partial class WordHandler
             if (countBy != 1) secNode.Format["lineNumberCountBy"] = countBy;
         }
 
-        // Column properties
+        // Column properties — dotted canonical keys mirror Set's input form
+        // (columns.count / columns.space / columns.equalWidth / columns.separator)
+        // and the sibling DocSettings readback in WordHandler.Navigation.DocSettings.cs.
         var cols = sectPr.GetFirstChild<Columns>();
         if (cols != null)
         {
-            secNode.Format["columns"] = cols.ColumnCount?.Value ?? 1;
+            secNode.Format["columns.count"] = cols.ColumnCount?.Value ?? 1;
             if (cols.Space?.Value != null && uint.TryParse(cols.Space.Value, out var colSpaceTwips))
-                secNode.Format["columnSpace"] = FormatTwipsToCm(colSpaceTwips);
-            if (cols.EqualWidth?.Value != null) secNode.Format["equalWidth"] = cols.EqualWidth.Value;
-            if (cols.Separator?.Value == true) secNode.Format["separator"] = true;
+                secNode.Format["columns.space"] = FormatTwipsToCm(colSpaceTwips);
+            if (cols.EqualWidth?.Value != null) secNode.Format["columns.equalWidth"] = cols.EqualWidth.Value;
+            if (cols.Separator?.Value == true) secNode.Format["columns.separator"] = true;
             var colDefs = cols.Elements<Column>().ToList();
             if (colDefs.Count > 0)
             {

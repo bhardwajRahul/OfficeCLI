@@ -946,13 +946,18 @@ public partial class ExcelHandler
             Type = "sparkline"
         };
 
-        // Type: default is line when attribute is absent
+        // Type: default is line when attribute is absent. The OOXML enum
+        // calls win-loss sparklines "Stacked", which collides with bar-chart
+        // stacked grouping in user vocabulary; surface it as "winLoss" on
+        // readback to match Excel's UI label. Set still accepts both
+        // "stacked" and "winLoss" / "winloss" / "win-loss" via the input
+        // alias map (ExcelHandler.Add.Drawings.cs:881).
         string spkType;
         if (spkGroup.Type?.HasValue == true)
         {
             var tv = spkGroup.Type.Value;
             spkType = tv == X14.SparklineTypeValues.Column ? "column"
-                : tv == X14.SparklineTypeValues.Stacked ? "stacked"
+                : tv == X14.SparklineTypeValues.Stacked ? "winLoss"
                 : "line";
         }
         else
