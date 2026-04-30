@@ -1261,12 +1261,21 @@ public partial class WordHandler
                 // CONSISTENCY(bcp47-validation): match the PPTX shape lang
                 // validator (Bcp47Shape) — reject malformed tags up front
                 // rather than writing them into <w:lang> and producing an
-                // unloadable document.
-                if (!string.IsNullOrEmpty(value) && !LangBcp47Shape.IsMatch(value))
-                    throw new ArgumentException($"Invalid BCP-47 language tag for {key}: '{value}'. Expected a tag like 'en-US', 'ja-JP', or 'ar-SA'.");
+                // unloadable document. Empty value clears the slot (and
+                // removes the <w:lang> element if all three slots end up
+                // empty); literal "null" is rejected as a stray sentinel.
+                bool clearSlot = string.IsNullOrEmpty(value);
+                if (!clearSlot)
+                {
+                    if (string.Equals(value, "null", StringComparison.OrdinalIgnoreCase))
+                        throw new ArgumentException($"Invalid BCP-47 language tag for {key}: '{value}'. Expected a tag like 'en-US', 'ja-JP', or 'ar-SA'.");
+                    if (!LangBcp47Shape.IsMatch(value))
+                        throw new ArgumentException($"Invalid BCP-47 language tag for {key}: '{value}'. Expected a tag like 'en-US', 'ja-JP', or 'ar-SA'.");
+                }
                 var lang = props.GetFirstChild<Languages>();
                 if (lang == null)
                 {
+                    if (clearSlot) return true;
                     lang = new Languages();
                     InsertRunPropInSchemaOrder(props, lang);
                 }
@@ -1275,19 +1284,23 @@ public partial class WordHandler
                     case "lang":
                     case "lang.latin":
                     case "lang.val":
-                        lang.Val = value;
+                        if (clearSlot) lang.Val = null; else lang.Val = value;
                         break;
                     case "lang.ea":
                     case "lang.eastasia":
                     case "lang.eastasian":
-                        lang.EastAsia = value;
+                        if (clearSlot) lang.EastAsia = null; else lang.EastAsia = value;
                         break;
                     case "lang.cs":
                     case "lang.complexscript":
                     case "lang.bidi":
-                        lang.Bidi = value;
+                        if (clearSlot) lang.Bidi = null; else lang.Bidi = value;
                         break;
                 }
+                // Remove the <w:lang> element entirely when all three slots
+                // are empty — leaves no stale empty-attr noise after clears.
+                if (lang.Val?.Value is null && lang.EastAsia?.Value is null && lang.Bidi?.Value is null)
+                    lang.Remove();
                 return true;
             }
             default:
