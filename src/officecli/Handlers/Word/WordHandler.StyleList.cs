@@ -116,6 +116,29 @@ public partial class WordHandler
             }
         }
 
+        // 3b. Lift direct pPr/<w:bidi/> into effective RightToLeftText.
+        // CONSISTENCY(rtl-cascade): mirrors step-2 paragraph-style pPr/bidi
+        // lift, but for the paragraph's own direct pPr (not its style).
+        // Without this, a run inside a hyperlink wrapper inherits no
+        // effective.rtl when the cascade only stamped <w:rtl/> on bare
+        // <w:r> children — hyperlink runs are added via a path that
+        // historically skipped the rtl stamp, leaving the resolver blind
+        // to paragraph direction (R16-bt-3).
+        var directBiDi = para.ParagraphProperties?.BiDi;
+        if (directBiDi != null)
+        {
+            var dBiVal = directBiDi.Val;
+            bool dOn = dBiVal == null
+                || dBiVal.InnerText == "1"
+                || dBiVal.InnerText == "true"
+                || (dBiVal.HasValue && dBiVal.Value);
+            effective.RightToLeftText = dOn
+                ? new RightToLeftText()
+                : new RightToLeftText { Val = DocumentFormat.OpenXml.OnOffValue.FromBoolean(false) };
+            if (sources != null)
+                sources["effective.rtl"] = "/direct";
+        }
+
         // 4. Apply run's own direct rPr (highest priority, excluding rStyle which was resolved above)
         if (run.RunProperties != null)
             MergeRunProperties(effective, run.RunProperties, "/direct", sources);

@@ -403,6 +403,14 @@ public partial class WordHandler
             hlRProps.Bold = new Bold();
         if (properties.TryGetValue("italic", out var hlItalic) && IsTruthy(hlItalic))
             hlRProps.Italic = new Italic();
+        // CONSISTENCY(rtl-cascade): inherit pPr/bidi from the enclosing
+        // paragraph onto the hyperlink's run rPr. Mirrors the cascade in
+        // SetElementParagraph / Add.Text run insertion (R16-bt-3). Without
+        // this, a hyperlink inserted into an RTL paragraph renders LTR
+        // because the run's RightToLeftText is missing — and effective.rtl
+        // never resolves on the run NodeBuilder side either.
+        if (hlPara.ParagraphProperties?.BiDi != null)
+            ApplyRunFormatting(hlRProps, "rtl", "true");
 
         var hlRun = new Run(hlRProps);
         var hlText = properties.GetValueOrDefault("text", hlUrl ?? hlAnchor ?? "link");
