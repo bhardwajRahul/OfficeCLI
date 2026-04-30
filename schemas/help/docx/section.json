@@ -129,6 +129,15 @@
       "readback": "rtl (only emitted when sectPr/<w:bidi/> is present)",
       "enforcement": "strict"
     },
+    "rtlGutter": {
+      "type": "bool",
+      "description": "places the binding gutter on the right side (writes <w:rtlGutter/> on sectPr). Used together with direction=rtl for Arabic/Hebrew layouts.",
+      "aliases": ["rtlgutter"],
+      "add": true, "set": true, "get": true,
+      "examples": ["--prop rtlGutter=true"],
+      "readback": "true (only emitted when sectPr/<w:rtlGutter/> is present)",
+      "enforcement": "report"
+    },
     "pageStart": {
       "type": "int",
       "description": "starting page number for the section (writes w:pgNumType/@w:start). Use 'none'/'off' to clear.",

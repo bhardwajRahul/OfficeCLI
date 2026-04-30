@@ -159,6 +159,17 @@ public partial class WordHandler
                 InsertSectPrChildInOrder(sectPr, new BiDi());
         }
 
+        // Section-level RTL gutter: <w:rtlGutter/> places the binding gutter
+        // on the right side. Mirrors Set vocabulary (rtlgutter) and uses the
+        // schema-aware inserter for canonical CT_SectPrBase order.
+        // CONSISTENCY(add-set-symmetry).
+        if (properties.TryGetValue("rtlGutter", out var sectRtlG)
+            || properties.TryGetValue("rtlgutter", out sectRtlG))
+        {
+            if (IsTruthy(sectRtlG))
+                InsertSectPrChildInOrder(sectPr, new GutterOnRight());
+        }
+
         // Dotted-key fallback for sectPr-level attrs not modeled by the
         // hand-rolled blocks above (single-attr forms like docGrid.* or
         // future schema additions). CONSISTENCY(add-set-symmetry).
