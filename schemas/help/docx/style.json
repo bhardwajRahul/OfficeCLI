@@ -266,20 +266,20 @@
     },
     "snapToGrid": {
       "type": "bool",
-      "description": "snap to document grid for CJK layout. Applied to the style's pPr.",
+      "description": "snap to document grid for CJK layout. Applied to the style's pPr. Add/Set only — Get does not surface this back today.",
       "aliases": ["snaptogrid"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop snapToGrid=false"],
-      "readback": "true/false",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "wordWrap": {
       "type": "bool",
-      "description": "allow word-break for non-CJK text inside CJK lines. Applied to the style's pPr.",
+      "description": "allow word-break for non-CJK text inside CJK lines. Applied to the style's pPr. Add/Set only — Get does not surface this back today.",
       "aliases": ["wordwrap"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop wordWrap=true"],
-      "readback": "true/false",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "autoSpaceDE": {
@@ -329,29 +329,29 @@
     },
     "topLinePunct": {
       "type": "bool",
-      "description": "compress punctuation at the start of a line (CJK). Applied to the style's pPr.",
+      "description": "compress punctuation at the start of a line (CJK). Applied to the style's pPr. Add/Set only — Get does not surface this back today.",
       "aliases": ["toplinepunct"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop topLinePunct=true"],
-      "readback": "true/false",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "suppressAutoHyphens": {
       "type": "bool",
-      "description": "disable automatic hyphenation in this style.",
+      "description": "disable automatic hyphenation in this style. Add/Set only — Get does not surface this back today.",
       "aliases": ["suppressautohyphens"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop suppressAutoHyphens=true"],
-      "readback": "true/false",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "suppressLineNumbers": {
       "type": "bool",
-      "description": "exclude this paragraph style from line numbering.",
+      "description": "exclude this paragraph style from line numbering. Add/Set only — Get does not surface this back today.",
       "aliases": ["suppresslinenumbers"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop suppressLineNumbers=true"],
-      "readback": "true/false",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "keepNext": {
@@ -392,11 +392,11 @@
     },
     "pbdr": {
       "type": "string",
-      "description": "paragraph border. Sub-keys: pbdr.top / pbdr.bottom / pbdr.left / pbdr.right / pbdr.between / pbdr.bar / pbdr.all. Value form: 'style:size:color' (e.g. 'single:6:#FF0000').",
+      "description": "paragraph border. Sub-keys: pbdr.top / pbdr.bottom / pbdr.left / pbdr.right / pbdr.between / pbdr.bar / pbdr.all. Value form: 'style:size:color' (e.g. 'single:6:#FF0000'). Set-only — Get does not surface paragraph borders on the style today.",
       "aliases": ["border"],
-      "add": false, "set": true, "get": true,
+      "add": false, "set": true, "get": false,
       "examples": ["--prop pbdr.bottom=single:6:#FF0000", "--prop pbdr.all=single:4:auto"],
-      "readback": "style on the bare key, sub-attrs as <key>.sz / <key>.color / <key>.space",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "numId": {
@@ -416,6 +416,18 @@
       "examples": ["--prop ilvl=0"],
       "readback": "integer 0-8",
       "enforcement": "report"
-    }
+    },
+    "effective.alignment":         { "type":"string", "add":false, "set":false, "get":true, "description":"resolved paragraph alignment after walking basedOn → linked → docDefaults.", "readback":"alignment token (left|center|right|both|distribute)", "enforcement":"report" },
+    "effective.alignment.src":     { "type":"string", "add":false, "set":false, "get":true, "description":"source pointer for effective.alignment (style id chain).", "readback":"style id or `docDefaults`", "enforcement":"report" },
+    "effective.direction":         { "type":"string", "add":false, "set":false, "get":true, "description":"resolved paragraph reading direction (rtl|ltr).", "readback":"`rtl` | `ltr`", "enforcement":"report" },
+    "effective.direction.src":     { "type":"string", "add":false, "set":false, "get":true, "description":"source pointer for effective.direction.", "readback":"style id or `docDefaults`", "enforcement":"report" },
+    "effective.highlight":         { "type":"string", "add":false, "set":false, "get":true, "description":"resolved highlight color name (yellow|green|cyan|...) inherited from the style chain.", "readback":"highlight token", "enforcement":"report" },
+    "effective.lineSpacing":       { "type":"string", "add":false, "set":false, "get":true, "description":"resolved line spacing (`<N>x` or `<N>pt`).", "readback":"unit-qualified spacing", "enforcement":"report" },
+    "effective.lineSpacing.src":   { "type":"string", "add":false, "set":false, "get":true, "description":"source pointer for effective.lineSpacing.", "readback":"style id or `docDefaults`", "enforcement":"report" },
+    "effective.spaceBefore":       { "type":"string", "add":false, "set":false, "get":true, "description":"resolved space-before (unit-qualified).", "readback":"unit-qualified length", "enforcement":"report" },
+    "effective.spaceBefore.src":   { "type":"string", "add":false, "set":false, "get":true, "description":"source pointer for effective.spaceBefore.", "readback":"style id or `docDefaults`", "enforcement":"report" },
+    "effective.spaceAfter":        { "type":"string", "add":false, "set":false, "get":true, "description":"resolved space-after (unit-qualified).", "readback":"unit-qualified length", "enforcement":"report" },
+    "effective.spaceAfter.src":    { "type":"string", "add":false, "set":false, "get":true, "description":"source pointer for effective.spaceAfter.", "readback":"style id or `docDefaults`", "enforcement":"report" },
+    "effective.strike":            { "type":"bool",   "add":false, "set":false, "get":true, "description":"true when strike-through is inherited from the style chain.", "readback":"true|false", "enforcement":"report" }
   }
 }

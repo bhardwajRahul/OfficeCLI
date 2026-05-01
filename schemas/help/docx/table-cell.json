@@ -247,18 +247,18 @@
     },
     "border.tl2br": {
       "type": "string",
-      "description": "top-left to bottom-right diagonal border (cell-only). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
-      "add": false, "set": true, "get": true,
+      "description": "top-left to bottom-right diagonal border (cell-only). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Set-only — diagonal-border readback is not surfaced today.",
+      "add": false, "set": true, "get": false,
       "examples": ["--prop border.tl2br=\"single;4;FF0000\""],
-      "readback": "style name under 'border.tl2br'; size under 'border.tl2br.sz'; color under 'border.tl2br.color'; space under 'border.tl2br.space' (4 separate keys, not a compound string)",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "border.tr2bl": {
       "type": "string",
-      "description": "top-right to bottom-left diagonal border (cell-only). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
-      "add": false, "set": true, "get": true,
+      "description": "top-right to bottom-left diagonal border (cell-only). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Set-only — diagonal-border readback is not surfaced today.",
+      "add": false, "set": true, "get": false,
       "examples": ["--prop border.tr2bl=\"single;4;FF0000\""],
-      "readback": "style name under 'border.tr2bl'; size under 'border.tr2bl.sz'; color under 'border.tr2bl.color'; space under 'border.tr2bl.space' (4 separate keys, not a compound string)",
+      "readback": "n/a",
       "enforcement": "report"
     }
   }

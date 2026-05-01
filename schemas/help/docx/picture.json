@@ -65,6 +65,9 @@
       "enforcement": "report"
     },
     "fileSize":    { "type":"number", "add":false, "set":false, "get":true, "description":"embedded image bytes.", "readback":"integer byte count", "enforcement":"report" },
-    "contentType": { "type":"string", "add":false, "set":false, "get":true, "description":"MIME type (e.g. image/png).", "readback":"MIME type string", "enforcement":"report" }
+    "contentType": { "type":"string", "add":false, "set":false, "get":true, "description":"MIME type (e.g. image/png).", "readback":"MIME type string", "enforcement":"report" },
+    "behindText":  { "type":"bool",   "add":false, "set":false, "get":true, "description":"true when the picture floats behind text (anchor @behindDoc=1).", "readback":"true on behind-text floats", "enforcement":"report" },
+    "hPosition":   { "type":"length", "add":false, "set":false, "get":true, "description":"absolute horizontal anchor position in cm (positionH/posOffset).", "readback":"length in cm (e.g. `5.0cm`)", "enforcement":"report" },
+    "hRelative":   { "type":"string", "add":false, "set":false, "get":true, "description":"horizontal anchor reference frame (e.g. page, margin, column, character).", "readback":"OOXML positionH @relativeFrom token", "enforcement":"report" }
   }
 }

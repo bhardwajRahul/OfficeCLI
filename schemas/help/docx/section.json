@@ -166,6 +166,9 @@
     "footerRef": { "type":"string", "add":false, "set":false, "get":true, "description":"path to primary (default) footer part. Convenience shortcut equal to footerRef.default when present.", "readback":"OOXML part path", "enforcement":"report" },
     "footerRef.default": { "type":"string", "add":false, "set":false, "get":true, "description":"path to default-type footer part.", "readback":"OOXML part path", "enforcement":"report" },
     "footerRef.first": { "type":"string", "add":false, "set":false, "get":true, "description":"path to first-page-only footer part.", "readback":"OOXML part path", "enforcement":"report" },
-    "footerRef.even": { "type":"string", "add":false, "set":false, "get":true, "description":"path to even-page footer part.", "readback":"OOXML part path", "enforcement":"report" }
+    "footerRef.even": { "type":"string", "add":false, "set":false, "get":true, "description":"path to even-page footer part.", "readback":"OOXML part path", "enforcement":"report" },
+    "colSpaces":         { "type":"string", "add":false, "set":false, "get":true, "description":"per-column space overrides — comma-separated EMU/twips values, one per column. Surfaces when columns carry individual @space attrs.", "readback":"comma-separated integer twips", "enforcement":"report" },
+    "columns.equalWidth":{ "type":"bool",   "add":false, "set":false, "get":true, "description":"sectPr cols @equalWidth flag — true when all columns share the same width.", "readback":"true|false", "enforcement":"report" },
+    "columns.separator": { "type":"bool",   "add":false, "set":false, "get":true, "description":"sectPr cols @sep flag — vertical separator line drawn between columns.", "readback":"true when set", "enforcement":"report" }
   }
 }

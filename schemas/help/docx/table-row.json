@@ -32,10 +32,10 @@
     },
     "height.exact": {
       "type": "length",
-      "description": "row height in twips (Exact rule, cannot grow).",
-      "add": true, "set": true, "get": true,
+      "description": "row height in twips (Exact rule, cannot grow). Add/Set only — Get does not surface a separate exact-height key; inspect `height.rule=exact` paired with `height` instead.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop height.exact=500"],
-      "readback": "twips with rule=exact",
+      "readback": "n/a (inspect height + height.rule)",
       "enforcement": "report"
     },
     "header": {
@@ -45,6 +45,7 @@
       "examples": ["--prop header=true"],
       "readback": "true when header, key absent otherwise",
       "enforcement": "report"
-    }
+    },
+    "height.rule": { "type":"string", "add":false, "set":false, "get":true, "description":"row height rule readback — `exact` when the row enforces a fixed height, otherwise absent (auto/atLeast).", "readback":"`exact` when set", "enforcement":"report" }
   }
 }

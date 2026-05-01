@@ -355,9 +355,9 @@
     },
     "effective.size.src": {
       "type": "string",
-      "description": "source pointer for effective.size — path of the writing layer (e.g. \"/styles/Heading1\", \"/docDefaults\").",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.size — path of the writing layer (e.g. \"/styles/Heading1\", \"/docDefaults\"). Documented but not emitted today; only the resolved `effective.size` value surfaces on Get.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned — only effective.size emits today)",
       "enforcement": "report"
     },
     "effective.font.ascii": {
@@ -369,9 +369,9 @@
     },
     "effective.font.ascii.src": {
       "type": "string",
-      "description": "source pointer for effective.font.ascii.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.font.ascii. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.font.eastAsia": {
@@ -383,9 +383,9 @@
     },
     "effective.font.eastAsia.src": {
       "type": "string",
-      "description": "source pointer for effective.font.eastAsia.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.font.eastAsia. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.font.hAnsi": {
@@ -397,9 +397,9 @@
     },
     "effective.font.hAnsi.src": {
       "type": "string",
-      "description": "source pointer for effective.font.hAnsi.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.font.hAnsi. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.font.cs": {
@@ -411,9 +411,9 @@
     },
     "effective.font.cs.src": {
       "type": "string",
-      "description": "source pointer for effective.font.cs.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.font.cs. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.bold": {
@@ -425,9 +425,9 @@
     },
     "effective.bold.src": {
       "type": "string",
-      "description": "source pointer for effective.bold.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.bold. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.italic": {
@@ -439,9 +439,9 @@
     },
     "effective.italic.src": {
       "type": "string",
-      "description": "source pointer for effective.italic.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.italic. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.color": {
@@ -453,9 +453,9 @@
     },
     "effective.color.src": {
       "type": "string",
-      "description": "source pointer for effective.color.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.color. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.underline": {
@@ -467,9 +467,9 @@
     },
     "effective.underline.src": {
       "type": "string",
-      "description": "source pointer for effective.underline.",
-      "add": false, "set": false, "get": true,
-      "readback": "style/docDefaults path",
+      "description": "source pointer for effective.underline. Documented but not emitted today.",
+      "add": false, "set": false, "get": false,
+      "readback": "n/a (planned)",
       "enforcement": "report"
     },
     "effective.rtl": {
@@ -485,6 +485,10 @@
       "add": false, "set": false, "get": true,
       "readback": "style/docDefaults path",
       "enforcement": "report"
-    }
+    },
+    "dirty":         { "type":"bool",   "add":false, "set":false, "get":true, "description":"true when the run is flagged as dirty (rPr/dirty=1) — Word treats it as needing reflow on next open.", "readback":"true|false", "enforcement":"report" },
+    "font.ascii":    { "type":"string", "add":false, "set":false, "get":true, "description":"individual rFonts @ascii slot readback. On Add/Set use the unified `font.latin` key (which writes both ascii + hAnsi).", "readback":"font family name", "enforcement":"report" },
+    "font.eastAsia": { "type":"string", "add":false, "set":false, "get":true, "description":"individual rFonts @eastAsia slot readback. On Add/Set use the `font.ea` key.", "readback":"font family name", "enforcement":"report" },
+    "font.hAnsi":    { "type":"string", "add":false, "set":false, "get":true, "description":"individual rFonts @hAnsi slot readback. On Add/Set use the unified `font.latin` key (which writes both ascii + hAnsi).", "readback":"font family name", "enforcement":"report" }
   }
 }

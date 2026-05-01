@@ -33,48 +33,48 @@
       "readback": "n/a (embedded in instruction)",
       "enforcement": "report"
     },
-    "identifier": {
+    "id": {
       "type": "string",
-      "description": "SEQ field's identifier (sequence label). Defaults to 'name' when 'identifier' is not supplied — alias accepted on input.",
-      "aliases": ["id"],
+      "description": "SEQ field's identifier (sequence label). Defaults to 'name' when 'id' is not supplied. Alias: identifier.",
+      "aliases": ["identifier"],
       "add": true, "set": true, "get": true,
-      "examples": ["--prop identifier=Figure"],
+      "examples": ["--prop id=Figure", "--prop identifier=Figure"],
       "readback": "n/a (embedded in instruction)",
       "enforcement": "report"
     },
     "expression": {
       "type": "string",
-      "description": "IF field's logical expression (e.g. 'MERGEFIELD Gender = \"Male\"').",
+      "description": "IF field's logical expression (e.g. 'MERGEFIELD Gender = \"Male\"'). Add/Set only — surfaces back inside the `instruction` readback, not as its own Format key.",
       "aliases": ["condition"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop expression='{ MERGEFIELD Gender } = \"Male\"'"],
       "readback": "n/a (embedded in instruction)",
       "enforcement": "report"
     },
     "trueText": {
       "type": "string",
-      "description": "IF field's text shown when expression evaluates true.",
+      "description": "IF field's text shown when expression evaluates true. Add/Set only — surfaces back inside the `instruction` readback.",
       "aliases": ["truetext"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop trueText=\"Mr.\""],
       "readback": "n/a (embedded in instruction)",
       "enforcement": "report"
     },
     "falseText": {
       "type": "string",
-      "description": "IF field's text shown when expression evaluates false.",
+      "description": "IF field's text shown when expression evaluates false. Add/Set only — surfaces back inside the `instruction` readback.",
       "aliases": ["falsetext"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop falseText=\"Ms.\""],
       "readback": "n/a (embedded in instruction)",
       "enforcement": "report"
     },
     "hyperlink": {
       "type": "bool",
-      "description": "REF field: append \\h switch so the inserted reference becomes a clickable hyperlink to the bookmark target.",
-      "add": true, "set": true, "get": true,
+      "description": "REF field: append \\h switch so the inserted reference becomes a clickable hyperlink to the bookmark target. Add/Set only — surfaces back as a switch inside the `instruction` readback.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop hyperlink=true"],
-      "readback": "instruction switches",
+      "readback": "n/a (embedded in instruction)",
       "enforcement": "report"
     },
     "format": {

@@ -80,11 +80,12 @@
       "readback": "twips",
       "enforcement": "report"
     },
-    "cellspacing": {
+    "cellSpacing": {
       "type": "int",
-      "description": "space between cells in twips.",
+      "description": "space between cells in twips. Alias: cellspacing.",
+      "aliases": ["cellspacing"],
       "add": true, "set": true, "get": true,
-      "examples": ["--prop cellspacing=40"],
+      "examples": ["--prop cellSpacing=40"],
       "readback": "twips",
       "enforcement": "report"
     },
@@ -98,10 +99,10 @@
     },
     "padding": {
       "type": "int",
-      "description": "default cell padding (all four sides) in twips.",
-      "add": true, "set": true, "get": true,
+      "description": "default cell padding (all four sides) in twips. Add/Set only — Get does not surface the table-default cell margin today.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop padding=100"],
-      "readback": "per-side values on TableCellMarginDefault",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "style": {
@@ -123,52 +124,52 @@
     },
     "border.top": {
       "type": "string",
-      "description": "outer top border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
-      "add": true, "set": true, "get": true,
+      "description": "outer top border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units). Add/Set only — table-level border readback is not surfaced today; inspect per-cell border.top instead.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop border.top=\"single;4;000000\""],
-      "readback": "style name under 'border.top'; size under 'border.top.sz'; color under 'border.top.color'; space under 'border.top.space' (4 separate keys, not a compound string)",
+      "readback": "n/a (read per-cell)",
       "enforcement": "report"
     },
     "border.bottom": {
       "type": "string",
-      "description": "outer bottom border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
-      "add": true, "set": true, "get": true,
+      "description": "outer bottom border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR'. Add/Set only — read per-cell.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop border.bottom=\"double;6;0000FF\""],
-      "readback": "style name under 'border.bottom'; size under 'border.bottom.sz'; color under 'border.bottom.color'; space under 'border.bottom.space' (4 separate keys, not a compound string)",
+      "readback": "n/a (read per-cell)",
       "enforcement": "report"
     },
     "border.left": {
       "type": "string",
-      "description": "outer left border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
-      "add": true, "set": true, "get": true,
+      "description": "outer left border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: docx only accepts the semicolon form. Add/Set only — read per-cell.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop border.left=\"single;4\""],
-      "readback": "style name under 'border.left'; size under 'border.left.sz'; color under 'border.left.color'; space under 'border.left.space' (4 separate keys, not a compound string)",
+      "readback": "n/a (read per-cell)",
       "enforcement": "report"
     },
     "border.right": {
       "type": "string",
-      "description": "outer right border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
-      "add": true, "set": true, "get": true,
+      "description": "outer right border. Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Add/Set only — read per-cell.",
+      "add": true, "set": true, "get": false,
       "examples": ["--prop border.right=\"single;4\""],
-      "readback": "style name under 'border.right'; size under 'border.right.sz'; color under 'border.right.color'; space under 'border.right.space' (4 separate keys, not a compound string)",
+      "readback": "n/a (read per-cell)",
       "enforcement": "report"
     },
     "border.horizontal": {
       "type": "string",
-      "description": "inside horizontal borders (between rows). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Alias: border.insideH. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
+      "description": "inside horizontal borders (between rows). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Alias: border.insideH. Add/Set only — Get does not surface table-level inside borders today.",
       "aliases": ["border.insideh", "border.insideH"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop border.horizontal=\"single;4;CCCCCC\""],
-      "readback": "under canonical key 'border.insideH'",
+      "readback": "n/a",
       "enforcement": "report"
     },
     "border.vertical": {
       "type": "string",
-      "description": "inside vertical borders (between columns). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Alias: border.insideV. Cross-format note: pptx accepts a space-separated 'WIDTH DASH COLOR' form; docx only accepts the semicolon form 'STYLE;SIZE;COLOR' (SIZE is in 1/8 pt units).",
+      "description": "inside vertical borders (between columns). Format: STYLE[;SIZE[;COLOR[;SPACE]]]. Alias: border.insideV. Add/Set only — Get does not surface table-level inside borders today.",
       "aliases": ["border.insidev", "border.insideV"],
-      "add": true, "set": true, "get": true,
+      "add": true, "set": true, "get": false,
       "examples": ["--prop border.vertical=\"single;4;CCCCCC\""],
-      "readback": "under canonical key 'border.insideV'",
+      "readback": "n/a",
       "enforcement": "report"
     }
   },

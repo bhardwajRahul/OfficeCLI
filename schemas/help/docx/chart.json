@@ -119,7 +119,7 @@
     "dispunits":      { "type": "string", "aliases": ["displayunits"], "add": true, "set": true, "get": false, "description": "value-axis display units divisor. Values: none, hundreds, thousands, tenThousands|10000, hundredThousands|100000, millions, tenMillions|10000000, hundredMillions|100000000, billions, trillions.", "examples": ["--prop dispunits=thousands"] },
 
     "gridlines":      { "type": "bool", "aliases": ["majorgridlines"], "add": true, "set": true, "get": true, "description": "value-axis major gridlines. true|false toggle, or line spec 'color', 'color:width', 'color:width:dash' to style; 'none' removes.", "examples": ["--prop gridlines=true", "--prop gridlines=E0E0E0:0.3", "--prop gridlines=none"], "readback": "true | false" },
-    "minorgridlines": { "type": "bool", "add": true, "set": true, "get": true, "description": "value-axis minor gridlines; same format as gridlines.", "examples": ["--prop minorgridlines=true", "--prop minorgridlines=F0F0F0:0.25"], "readback": "true | false" },
+    "minorGridlines": { "type": "bool", "aliases": ["minorgridlines"], "add": true, "set": true, "get": true, "description": "value-axis minor gridlines; same format as gridlines.", "examples": ["--prop minorGridlines=true", "--prop minorGridlines=F0F0F0:0.25"], "readback": "true | false" },
     "majorTickMark": { "type": "string", "add": false, "set": true, "get": true, "description": "major tick mark style (out / in / cross / none).", "examples": ["--prop majorTickMark=out"], "readback": "tick mark token", "enforcement": "report" },
     "minorTickMark": { "type": "string", "add": false, "set": true, "get": true, "description": "minor tick mark style (out / in / cross / none).", "examples": ["--prop minorTickMark=none"], "readback": "tick mark token", "enforcement": "report" },
     "tickLabelPos":  { "type": "string", "add": false, "set": true, "get": true, "description": "tick label position (high / low / nextTo / none).", "examples": ["--prop tickLabelPos=nextTo"], "readback": "tick label position token", "enforcement": "report" },
@@ -192,6 +192,8 @@
     "catTitle":        { "type": "string", "add": false, "set": false, "get": true, "description": "category axis title text.", "readback": "title string", "enforcement": "report" },
     "catAxisVisible":  { "type": "bool",   "add": false, "set": false, "get": true, "description": "category axis visibility (false when deleted).", "readback": "true | false", "enforcement": "report" },
     "bubbleScale":     { "type": "number", "add": false, "set": false, "get": true, "description": "bubble chart scale (% of default).", "readback": "integer percentage", "enforcement": "report" },
-    "firstSliceAngle": { "type": "number", "add": false, "set": false, "get": true, "description": "pie/doughnut first slice angle (degrees).", "readback": "integer degrees", "enforcement": "report" }
+    "firstSliceAngle": { "type": "number", "add": false, "set": false, "get": true, "description": "pie/doughnut first slice angle (degrees).", "readback": "integer degrees", "enforcement": "report" },
+    "holeSize":        { "type":"number", "add":false, "set":false, "get":true, "description":"doughnut hole size readback (camelCase canonical of `holesize`).", "readback":"integer 10..90 percent", "enforcement":"report" },
+    "dispUnits":       { "type":"string", "add":false, "set":false, "get":true, "description":"value-axis display units token readback (e.g. thousands, millions). Surfaces on the chart node when emitted by the value axis.", "readback":"display unit token", "enforcement":"report" }
   }
 }

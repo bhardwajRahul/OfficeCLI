@@ -381,7 +381,12 @@
     "extended.characters":         { "type":"number", "add":false, "set":false, "get":true, "description":"docProps/app.xml Characters count.", "readback":"integer", "enforcement":"report" },
     "extended.lines":              { "type":"number", "add":false, "set":false, "get":true, "description":"docProps/app.xml Lines count.", "readback":"integer", "enforcement":"report" },
     "extended.paragraphs":         { "type":"number", "add":false, "set":false, "get":true, "description":"docProps/app.xml Paragraphs count.", "readback":"integer", "enforcement":"report" },
-    "extended.totalTime":          { "type":"number", "add":false, "set":false, "get":true, "description":"docProps/app.xml TotalTime field (minutes).", "readback":"integer minutes", "enforcement":"report" }
+    "extended.totalTime":          { "type":"number", "add":false, "set":false, "get":true, "description":"docProps/app.xml TotalTime field (minutes).", "readback":"integer minutes", "enforcement":"report" },
+    "bookFoldPrintingSheets":  { "type":"number", "add":false, "set":false, "get":true, "description":"settings.xml bookFoldPrintingSheets — sheets per booklet signature when book-fold printing.", "readback":"integer sheets-per-signature", "enforcement":"report" },
+    "bookFoldReversePrinting": { "type":"bool",   "add":false, "set":false, "get":true, "description":"settings.xml bookFoldRevPrinting flag — true when book-fold printing reverses the page order.", "readback":"true|false", "enforcement":"report" },
+    "doNotDisplayPageBoundaries":{ "type":"bool", "add":false, "set":false, "get":true, "description":"settings.xml doNotDisplayPageBoundaries flag — Word view hides the page-boundary frame.", "readback":"true when set", "enforcement":"report" },
+    "columns.equalWidth":      { "type":"bool",   "add":false, "set":false, "get":true, "description":"document-default columns equal-width flag (sectPr cols @equalWidth on the body sectPr).", "readback":"true|false", "enforcement":"report" },
+    "columns.separator":       { "type":"bool",   "add":false, "set":false, "get":true, "description":"document-default columns separator flag (sectPr cols @sep on the body sectPr).", "readback":"true|false", "enforcement":"report" }
   },
   "children": [
     { "element": "body",      "pathSegment": "body",      "cardinality": "1" },
