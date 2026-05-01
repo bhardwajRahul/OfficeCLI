@@ -681,7 +681,7 @@ public partial class WordHandler
             var pPr = style.StyleParagraphProperties;
             if (pPr != null)
             {
-                if (pPr.Justification?.Val?.Value != null) styleNode.Format["alignment"] = pPr.Justification.Val.InnerText;
+                if (pPr.Justification?.Val?.Value != null) styleNode.Format["align"] = pPr.Justification.Val.InnerText;
                 // direction: <w:bidi/> on style pPr maps to direction=rtl,
                 // <w:bidi w:val="false"/> to direction=ltr (explicit cancel of
                 // an inherited basedOn bidi). R20-bt-1: previously any non-null
@@ -1194,7 +1194,7 @@ public partial class WordHandler
 
         var firstPara = header.Elements<Paragraph>().FirstOrDefault();
         if (firstPara?.ParagraphProperties?.Justification?.Val != null)
-            node.Format["alignment"] = firstPara.ParagraphProperties.Justification.Val.InnerText;
+            node.Format["align"] = firstPara.ParagraphProperties.Justification.Val.InnerText;
 
         node.ChildCount = header.Elements<Paragraph>().Count() + header.Elements<Table>().Count();
         // CONSISTENCY(header-footer-get): default depth (=1) returns the
@@ -1263,7 +1263,7 @@ public partial class WordHandler
 
         var firstPara = footer.Elements<Paragraph>().FirstOrDefault();
         if (firstPara?.ParagraphProperties?.Justification?.Val != null)
-            node.Format["alignment"] = firstPara.ParagraphProperties.Justification.Val.InnerText;
+            node.Format["align"] = firstPara.ParagraphProperties.Justification.Val.InnerText;
 
         node.ChildCount = footer.Elements<Paragraph>().Count() + footer.Elements<Table>().Count();
         // CONSISTENCY(header-footer-get): see GetHeaderNode.

@@ -568,7 +568,7 @@ public partial class WordHandler
             }
         }
 
-        if (!node.Format.ContainsKey("alignment") && alignment != null)
+        if (!node.Format.ContainsKey("align") && alignment != null)
         {
             node.Format["effective.alignment"] = alignment;
             if (alignSrc != null) node.Format["effective.alignment.src"] = alignSrc;

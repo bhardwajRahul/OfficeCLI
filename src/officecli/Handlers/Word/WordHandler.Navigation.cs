@@ -1049,7 +1049,7 @@ public partial class WordHandler
                 {
                     var alignText = pProps.Justification.Val.InnerText;
                     var alignValue = alignText == "both" ? "justify" : alignText;
-                    node.Format["alignment"] = alignValue;
+                    node.Format["align"] = alignValue;
                 }
                 if (pProps.SpacingBetweenLines != null)
                 {
@@ -1499,7 +1499,7 @@ public partial class WordHandler
                     // ("center", "right", "begin", etc.). Same trap as the
                     // LineSpacingRuleValues note in WordHandler CLAUDE.md.
                     if (ptabEl.Alignment?.HasValue == true)
-                        node.Format["alignment"] = ptabEl.Alignment.InnerText;
+                        node.Format["align"] = ptabEl.Alignment.InnerText;
                     if (ptabEl.RelativeTo?.HasValue == true)
                         node.Format["relativeTo"] = ptabEl.RelativeTo.InnerText;
                     if (ptabEl.Leader?.HasValue == true)
@@ -1679,7 +1679,7 @@ public partial class WordHandler
                 }
                 // Alignment
                 if (tp.TableJustification?.Val?.Value != null)
-                    node.Format["alignment"] = tp.TableJustification.Val.InnerText;
+                    node.Format["align"] = tp.TableJustification.Val.InnerText;
                 // Indent
                 if (tp.TableIndentation?.Width?.Value != null)
                     node.Format["indent"] = tp.TableIndentation.Width.Value;
@@ -2173,7 +2173,7 @@ public partial class WordHandler
         var firstPara = cell.Elements<Paragraph>().FirstOrDefault();
         var just = firstPara?.ParagraphProperties?.Justification?.Val;
         if (just != null)
-            node.Format["alignment"] = just.InnerText;
+            node.Format["align"] = just.InnerText;
         // Direction: <w:bidi/> on the first cell paragraph maps to canonical
         // direction=rtl. Mirrors paragraph readback canonical key. R20-bt-2:
         // also surface direction=rtl when the enclosing table carries

@@ -27,7 +27,7 @@
   ],
   "extends": "_shared/paragraph",
   "properties": {
-    "alignment": {
+    "align": {
       "type": "enum",
       "values": [
         "left",
@@ -38,8 +38,7 @@
         "distribute"
       ],
       "aliases": [
-        "halign",
-        "align"
+        "halign"
       ],
       "add": true,
       "set": true,

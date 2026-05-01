@@ -68,7 +68,7 @@
       "readback": "rtl when set, key absent otherwise",
       "enforcement": "report"
     },
-    "alignment": {
+    "align": {
       "type": "enum",
       "values": [
         "left",

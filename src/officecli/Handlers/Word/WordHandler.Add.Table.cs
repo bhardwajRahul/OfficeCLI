@@ -106,7 +106,7 @@ public partial class WordHandler
             if (tkl is "rows" or "cols" or "colwidths" || tkl.StartsWith("border")) continue;
             switch (tkl)
             {
-                case "alignment":
+                case "align":
                     tblProps.TableJustification = new TableJustification
                     {
                         Val = tv.ToLowerInvariant() switch
