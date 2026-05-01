@@ -283,12 +283,12 @@
       "readback": "BCP-47 tag",
       "enforcement": "report"
     },
-    "spc": {
+    "spacing": {
       "type": "number",
       "description": "character spacing in 1/100 pt (drawingML rPr/@spc).",
-      "aliases": ["spacing", "charspacing", "letterspacing"],
+      "aliases": ["spc", "charspacing", "letterspacing"],
       "add": true, "set": true, "get": true,
-      "examples": ["--prop spc=200"],
+      "examples": ["--prop spacing=200"],
       "readback": "integer",
       "enforcement": "report"
     },

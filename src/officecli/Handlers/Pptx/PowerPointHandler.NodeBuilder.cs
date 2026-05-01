@@ -1125,7 +1125,7 @@ public partial class PowerPointHandler
             var parentCTn = cmd.Parent as CommonTimeNode
                 ?? cmd.Ancestors<CommonTimeNode>().FirstOrDefault();
             if (parentCTn?.NodeType?.Value == TimeNodeValues.AfterEffect)
-                node.Format["autoplay"] = true;
+                node.Format["autoPlay"] = true;
             break;
         }
     }
