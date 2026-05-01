@@ -318,6 +318,13 @@
       "add": false, "set": false, "get": true,
       "readback": "showAs canonical token",
       "enforcement": "report"
+    },
+    "location": {
+      "type": "string",
+      "add": false, "set": false, "get": true,
+      "description": "target cell range where the pivot table is rendered (e.g. D1:E4).",
+      "readback": "A1 range string",
+      "enforcement": "report"
     }
   }
 }
