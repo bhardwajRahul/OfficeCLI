@@ -192,6 +192,12 @@ public partial class WordHandler
         foreach (var (key, value) in properties)
         {
             if (!key.Contains('.')) continue;
+            // border.{top,bottom,left,right,insideH,insideV,all} were already
+            // applied at the top of AddTable via ApplyTableBorders. Skip them
+            // here so they don't get mis-flagged UNSUPPORTED by the generic
+            // TypedAttributeFallback (which doesn't model border.*).
+            // CONSISTENCY(add-set-symmetry).
+            if (key.StartsWith("border.", StringComparison.OrdinalIgnoreCase)) continue;
             if (Core.TypedAttributeFallback.TrySet(tblProps, key, value)) continue;
             LastAddUnsupportedProps.Add(key);
         }
