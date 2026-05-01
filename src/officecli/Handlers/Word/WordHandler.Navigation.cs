@@ -1531,7 +1531,7 @@ public partial class WordHandler
                 if (instrEl != null)
                 {
                     node.Type = "instrText";
-                    node.Format["instr"] = instrEl.Text ?? "";
+                    node.Format["instruction"] = instrEl.Text ?? "";
                     // CONSISTENCY(canonical-keys): also surface the
                     // instruction as node.Text so selector text-contains
                     // searches (`instrText[text~=PAGE]`) and Get readback
