@@ -27,6 +27,8 @@ Verify with `officecli --version`. If still not found after install, open a new 
 
 **L1 (read) → L2 (DOM edit) → L3 (raw XML)**. Always prefer higher layers. Add `--json` for structured output.
 
+**Before doc work, check Specialized Skills** (bottom of this file). Fundraising decks, academic papers, financial models, dashboards, and Morph animations need their own skill loaded first — `load_skill` once, then proceed.
+
 ---
 
 ## Help System (IMPORTANT)
@@ -370,7 +372,7 @@ When the user's task matches a row below, load that skill before starting:
 
 This prints the skill's full SKILL.md to stdout — read it and follow its rules. Always use `load_skill` for the skills below; do not install them to disk. Only this top-level SKILL.md needs to be preloaded into your session.
 
-**Loading rule**: pick the **most specific** match in the "When to use" column. Each specialized skill's SKILL.md already contains every rule from the format default (`word` / `pptx` / `excel`) — call `load_skill` exactly once per task, never stack. If no specialized row fits, load the format default.
+**Loading rule**: pick the **most specific** match in the "When to use" column. Each specialized skill's SKILL.md already contains every rule from the format default (`word` / `pptx` / `excel`) — `load_skill` once **per artifact**, not per turn; the loaded rules stay in effect for the rest of the work on that file. If the user asks for two distinct artifacts (e.g. a fundraising deck AND a sales deck), load each one separately. If no specialized row fits, load the format default.
 
 ### Word (.docx)
 
