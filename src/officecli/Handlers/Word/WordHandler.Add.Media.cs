@@ -1,15 +1,11 @@
 // Copyright 2025 OfficeCli (officecli.ai)
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
-using OfficeCli.Core;
 using A = DocumentFormat.OpenXml.Drawing;
-using C = DocumentFormat.OpenXml.Drawing.Charts;
 using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
-using M = DocumentFormat.OpenXml.Math;
 
 namespace OfficeCli.Handlers;
 
@@ -70,6 +66,23 @@ public partial class WordHandler
             var extChartPart = chartMainPart.AddNewPart<ExtendedChartPart>();
             extChartPart.ChartSpace = cxChartSpace;
             extChartPart.ChartSpace.Save();
+
+            // CONSISTENCY(chartex-sidecars): see PowerPointHandler.Add.Media.cs
+            // for the full rationale. Word's chartEx host has the same hard
+            // requirement on rId1 (embedded xlsx) + rId2 (style) + rId3 (colors).
+            var embPart = extChartPart.AddNewPart<EmbeddedPackagePart>(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "rId1");
+            var xlsxBytes = Core.ChartExResources.BuildMinimalEmbeddedXlsx(categories, seriesData);
+            using (var emsr = new MemoryStream(xlsxBytes))
+                embPart.FeedData(emsr);
+
+            var stylePart = extChartPart.AddNewPart<ChartStylePart>("rId2");
+            using (var styleStream = Core.ChartExResources.OpenChartStyleXml())
+                stylePart.FeedData(styleStream);
+
+            var colorPart = extChartPart.AddNewPart<ChartColorStylePart>("rId3");
+            using (var colorStream = Core.ChartExResources.OpenChartColorStyleXml())
+                colorPart.FeedData(colorStream);
 
             var cxRelId = chartMainPart.GetIdOfPart(extChartPart);
             var cxChartRef = new DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.RelId { Id = cxRelId };

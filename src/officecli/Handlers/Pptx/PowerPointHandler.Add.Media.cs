@@ -375,6 +375,27 @@ public partial class PowerPointHandler
                     extChartPart.ChartSpace = cxChartSpace;
                     extChartPart.ChartSpace.Save();
 
+                    // CONSISTENCY(chartex-sidecars): every chartEx part needs
+                    // three sibling parts wired via specific relationship IDs:
+                    //   rId1 → embedded .xlsx (cx:externalData target)
+                    //   rId2 → chartStyle.xml
+                    //   rId3 → colors.xml
+                    // PowerPoint silently repairs (drops the chart, sometimes
+                    // the entire shape group) if any of these are missing.
+                    var embPart = extChartPart.AddNewPart<EmbeddedPackagePart>(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "rId1");
+                    var xlsxBytes = ChartExResources.BuildMinimalEmbeddedXlsx(categories, seriesData);
+                    using (var emsr = new MemoryStream(xlsxBytes))
+                        embPart.FeedData(emsr);
+
+                    var stylePart = extChartPart.AddNewPart<ChartStylePart>("rId2");
+                    using (var styleStream = ChartExResources.OpenChartStyleXml())
+                        stylePart.FeedData(styleStream);
+
+                    var colorPart = extChartPart.AddNewPart<ChartColorStylePart>("rId3");
+                    using (var colorStream = ChartExResources.OpenChartColorStyleXml())
+                        colorPart.FeedData(colorStream);
+
                     var chartGfEx = BuildExtendedChartGraphicFrame(chartSlidePart, extChartPart,
                         chartId, chartName, chartX, chartY, chartCx, chartCy);
                     InsertAtPosition(chartShapeTree, chartGfEx, index);
