@@ -1333,6 +1333,50 @@ public partial class WordHandler
             level.AppendChild(pPr);
         }
 
+        // BUG-R5-T2: AddLvl previously dropped font/size/color/bold/italic/
+        // underline silently — they're documented for SetAbstractNumPath
+        // level-scope but Add never consumed them. Mirror the Set branch
+        // (NumberingSymbolRunProperties is the lvl-level rPr container).
+        NumberingSymbolRunProperties? rPr = null;
+        NumberingSymbolRunProperties EnsureRPr() => rPr ??= new NumberingSymbolRunProperties();
+        if (properties.TryGetValue("font", out var lvlFontRaw) && !string.IsNullOrEmpty(lvlFontRaw))
+        {
+            var rp = EnsureRPr();
+            var rf = rp.GetFirstChild<RunFonts>() ?? rp.AppendChild(new RunFonts());
+            rf.Ascii = lvlFontRaw;
+            rf.HighAnsi = lvlFontRaw;
+            rf.EastAsia = lvlFontRaw;
+        }
+        if (properties.TryGetValue("size", out var lvlSizeRaw) && !string.IsNullOrEmpty(lvlSizeRaw))
+        {
+            var rp = EnsureRPr();
+            var halfPt = (int)Math.Round(ParseFontSize(lvlSizeRaw) * 2, MidpointRounding.AwayFromZero);
+            rp.AppendChild(new FontSize { Val = halfPt.ToString() });
+        }
+        if (properties.TryGetValue("color", out var lvlColorRaw) && !string.IsNullOrEmpty(lvlColorRaw))
+        {
+            var rp = EnsureRPr();
+            rp.AppendChild(new Color { Val = SanitizeHex(lvlColorRaw) });
+        }
+        if (properties.TryGetValue("bold", out var lvlBoldRaw) && IsTruthy(lvlBoldRaw))
+        {
+            EnsureRPr().AppendChild(new Bold());
+        }
+        if (properties.TryGetValue("italic", out var lvlItalRaw) && IsTruthy(lvlItalRaw))
+        {
+            EnsureRPr().AppendChild(new Italic());
+        }
+        if (properties.TryGetValue("underline", out var lvlUnderRaw) && !string.IsNullOrEmpty(lvlUnderRaw))
+        {
+            var u = new Underline();
+            if (IsTruthy(lvlUnderRaw)) u.Val = UnderlineValues.Single;
+            else if (string.Equals(lvlUnderRaw, "double", StringComparison.OrdinalIgnoreCase)) u.Val = UnderlineValues.Double;
+            else if (string.Equals(lvlUnderRaw, "none", StringComparison.OrdinalIgnoreCase) || string.Equals(lvlUnderRaw, "false", StringComparison.OrdinalIgnoreCase)) u.Val = UnderlineValues.None;
+            else u.Val = UnderlineValues.Single;
+            EnsureRPr().AppendChild(u);
+        }
+        if (rPr != null) level.AppendChild(rPr);
+
         // CRITICAL: AppendChild — NOT AddChild. Schema-aware AddChild treats
         // <w:lvl> as a single-instance child slot (the SDK's metadata says
         // "lvl[0..8]" but its schema model still flags them all as the same
