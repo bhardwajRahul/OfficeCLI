@@ -482,14 +482,43 @@ public partial class WordHandler
         // to keep the call idempotent-ish for scripts that only pass --prop name.
         bool IdTaken(string candidate) => stylesPart.Styles.Elements<Style>()
             .Any(s => string.Equals(s.StyleId?.Value, candidate, StringComparison.Ordinal));
+        // BUG-R6-03: dump→batch on a fresh blank docx fails 42×
+        // ("Style Normal already exists") because real documents always
+        // carry built-in style definitions (Normal, Heading1-9, Title,
+        // ListParagraph, …) and the blank template ships with the same
+        // ids reserved. For built-in ids the safe semantics is upsert:
+        // remove the existing definition and let the rest of AddStyle
+        // re-create it with the caller's full property bag. Mirrors
+        // BlankDocCreator's hands-off treatment of built-ins (it only
+        // registers the bare style scaffolding).
+        var builtInIdsForUpsert = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Normal", "Heading1", "Heading2", "Heading3", "Heading4", "Heading5",
+            "Heading6", "Heading7", "Heading8", "Heading9", "Title", "Subtitle",
+            "Quote", "IntenseQuote", "ListParagraph", "NoSpacing", "TOCHeading",
+            "DefaultParagraphFont", "TableNormal", "NoList",
+        };
         if (IdTaken(styleId))
         {
-            if (explicitId)
+            if (builtInIdsForUpsert.Contains(styleId))
+            {
+                // Idempotent re-add: drop the existing definition. We
+                // preserve the explicitId path's strictness for non-
+                // built-in ids so users authoring custom styles still
+                // see a clear "duplicate id" error.
+                var existing = stylesPart.Styles.Elements<Style>()
+                    .FirstOrDefault(s => string.Equals(s.StyleId?.Value, styleId, StringComparison.Ordinal));
+                existing?.Remove();
+            }
+            else if (explicitId)
                 throw new ArgumentException(
                     $"Style '{styleId}' already exists. Pick a unique --prop id or --prop name.");
-            var baseId = styleId;
-            int suffix = 2;
-            while (IdTaken(styleId)) styleId = $"{baseId}{suffix++}";
+            else
+            {
+                var baseId = styleId;
+                int suffix = 2;
+                while (IdTaken(styleId)) styleId = $"{baseId}{suffix++}";
+            }
         }
 
         // OOXML requires w:name to be unique across styles.xml, same as w:styleId.
