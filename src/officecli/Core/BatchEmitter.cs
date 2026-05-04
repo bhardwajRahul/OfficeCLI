@@ -160,16 +160,31 @@ public static class BatchEmitter
         return m.Success ? m.Groups[1].Value : null;
     }
 
-    // Section-level keys that root.Format exposes. Theme / docDefaults /
-    // settings / protection live on root too but each gets its own emit
-    // phase, so this list intentionally omits them.
-    private static readonly HashSet<string> SectionKeys = new(StringComparer.OrdinalIgnoreCase)
+    // Root-level keys that round-trip via `set /`. Includes section page
+    // layout, document protection, doc-level grid + defaults. Excludes
+    // metadata that auto-updates on save (created/modified timestamps,
+    // lastModifiedBy, package author/title — those re-stamp anyway).
+    private static readonly HashSet<string> RootScalarKeys = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Section page layout (mirrors body's trailing sectPr)
         "pageWidth", "pageHeight", "orientation",
         "marginTop", "marginBottom", "marginLeft", "marginRight",
         "pageStart", "pageNumFmt",
         "titlePage", "direction", "rtlGutter",
         "lineNumbers", "lineNumberCountBy",
+        // Document protection
+        "protection", "protectionEnforced",
+        // Document grid (CJK-aware line layout)
+        "charSpacingControl",
+    };
+
+    // Dotted-prefix groups that round-trip wholesale via `set /`. Each
+    // sub-key is forwarded as-is; the schema-reflection layer routes the
+    // dotted path into the right OOXML target.
+    private static readonly string[] RootPrefixGroups = new[]
+    {
+        "docDefaults.",
+        "docGrid.",
     };
 
     private static void EmitSection(WordHandler word, List<BatchItem> items)
@@ -178,7 +193,19 @@ public static class BatchEmitter
         var props = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (k, v) in root.Format)
         {
-            if (!SectionKeys.Contains(k)) continue;
+            bool include = RootScalarKeys.Contains(k);
+            if (!include)
+            {
+                foreach (var pref in RootPrefixGroups)
+                {
+                    if (k.StartsWith(pref, StringComparison.OrdinalIgnoreCase))
+                    {
+                        include = true;
+                        break;
+                    }
+                }
+            }
+            if (!include) continue;
             if (v == null) continue;
             var s = v switch { bool b => b ? "true" : "false", _ => v.ToString() ?? "" };
             if (s.Length > 0) props[k] = s;
