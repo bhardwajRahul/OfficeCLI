@@ -235,7 +235,12 @@ public partial class WordHandler
             if (hPos != null)
             {
                 var offset = hPos.GetFirstChild<DW.PositionOffset>();
-                if (offset != null && long.TryParse(offset.Text, out var hEmu))
+                // BUG-R7-11: skip zero-valued offsets. AddPicture defaults the
+                // PositionOffset to 0 when no hPosition prop is given, so a
+                // dump that originally omitted hPosition would jitter to
+                // hPosition=0.0cm after round-trip. Treat 0 as "no
+                // positional override" to keep dump→batch idempotent.
+                if (offset != null && long.TryParse(offset.Text, out var hEmu) && hEmu != 0)
                     node.Format["hPosition"] = $"{hEmu / 360000.0:F1}cm";
                 if (hPos.RelativeFrom?.HasValue == true)
                     node.Format["hRelative"] = hPos.RelativeFrom.InnerText;
@@ -245,7 +250,8 @@ public partial class WordHandler
             if (vPos != null)
             {
                 var offset = vPos.GetFirstChild<DW.PositionOffset>();
-                if (offset != null && long.TryParse(offset.Text, out var vEmu))
+                // BUG-R7-11: see hPosition note above.
+                if (offset != null && long.TryParse(offset.Text, out var vEmu) && vEmu != 0)
                     node.Format["vPosition"] = $"{vEmu / 360000.0:F1}cm";
                 if (vPos.RelativeFrom?.HasValue == true)
                     node.Format["vRelative"] = vPos.RelativeFrom.InnerText;
