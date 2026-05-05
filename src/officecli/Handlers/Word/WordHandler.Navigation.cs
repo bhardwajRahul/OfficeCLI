@@ -1469,11 +1469,27 @@ public partial class WordHandler
                     // typed Runs and reached via GetAllRuns above; if they
                     // somehow surface as unknown here it's because the
                     // entire paragraph is malformed and we'd duplicate.
-                    if (unkRun.Parent is not DocumentFormat.OpenXml.OpenXmlUnknownElement) continue;
+                    // BUG-DUMP7-10: also accept InsertedRun/DeletedRun
+                    // ancestors — w:del>w:ruby in a malformed doc parses
+                    // ruby as unknown but the typed w:del wrapper still
+                    // sits between para and the unknown subtree, so the
+                    // ancestor (not just direct parent) needs the typed
+                    // change-track wrapper allowance.
+                    if (unkRun.Parent is not DocumentFormat.OpenXml.OpenXmlUnknownElement
+                        && unkRun.Ancestors<InsertedRun>().FirstOrDefault() == null
+                        && unkRun.Ancestors<DeletedRun>().FirstOrDefault() == null)
+                        continue;
                     var sbInner = new System.Text.StringBuilder();
                     foreach (var tEl in unkRun.Descendants<DocumentFormat.OpenXml.OpenXmlUnknownElement>())
                     {
-                        if (tEl.LocalName == "t" && tEl.NamespaceUri == wNs)
+                        if (tEl.NamespaceUri != wNs) continue;
+                        // BUG-DUMP7-10: a w:del-wrapped ruby's inner runs
+                        // carry their text in <w:delText>, not <w:t>.
+                        // Without delText/instrText the "base"/"rt" text
+                        // dropped silently and the paragraph surfaced empty.
+                        if (tEl.LocalName == "t"
+                            || tEl.LocalName == "delText"
+                            || tEl.LocalName == "instrText")
                             sbInner.Append(tEl.InnerText);
                     }
                     if (sbInner.Length == 0) continue;
@@ -1483,6 +1499,31 @@ public partial class WordHandler
                         Text = sbInner.ToString(),
                         Path = $"{path}/r[{runIdx + 1}]",
                     };
+                    // BUG-DUMP7-10: preserve trackChange attribution from
+                    // the typed w:ins/w:del ancestor so the round-trip
+                    // re-emits the wrapper (mirrors the typed-Run branch
+                    // at the top of this method).
+                    var insAnc = unkRun.Ancestors<InsertedRun>().FirstOrDefault();
+                    if (insAnc != null)
+                    {
+                        synthNode.Format["trackChange"] = "ins";
+                        if (!string.IsNullOrEmpty(insAnc.Author?.Value))
+                            synthNode.Format["trackChange.author"] = insAnc.Author!.Value!;
+                        if (insAnc.Date?.Value is DateTime insAncDate)
+                            synthNode.Format["trackChange.date"] = insAncDate.ToString("o");
+                    }
+                    else
+                    {
+                        var delAnc = unkRun.Ancestors<DeletedRun>().FirstOrDefault();
+                        if (delAnc != null)
+                        {
+                            synthNode.Format["trackChange"] = "del";
+                            if (!string.IsNullOrEmpty(delAnc.Author?.Value))
+                                synthNode.Format["trackChange.author"] = delAnc.Author!.Value!;
+                            if (delAnc.Date?.Value is DateTime delAncDate)
+                                synthNode.Format["trackChange.date"] = delAncDate.ToString("o");
+                        }
+                    }
                     node.Children.Add(synthNode);
                     runIdx++;
                 }
