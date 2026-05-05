@@ -60,9 +60,14 @@ public partial class WordHandler
         // dump emitted name=… on round-trip but Add silently dropped it,
         // so the chart's shape name reverted to its title every replay.
         // Honor caller intent first; fall back to title, then synthesize.
-        var chartName = properties.GetValueOrDefault("name")
-                     ?? chartTitle
-                     ?? $"Chart {docPropId}";
+        // CONSISTENCY(empty-string-fallback): mirror AddPicture's
+        // !IsNullOrEmpty guard — `??` only short-circuits on null, so a
+        // literal name="" would otherwise pin the chart's shape name to
+        // empty instead of falling through to title.
+        var chartName = (properties.TryGetValue("name", out var chartNameOverride)
+                         && !string.IsNullOrEmpty(chartNameOverride))
+            ? chartNameOverride
+            : (chartTitle ?? $"Chart {docPropId}");
 
         // Extended chart types (cx:chart) — funnel, treemap, sunburst, boxWhisker, histogram
         if (Core.ChartExBuilder.IsExtendedChartType(chartType))
