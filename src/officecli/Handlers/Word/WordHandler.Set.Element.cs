@@ -1253,7 +1253,23 @@ public partial class WordHandler
                     };
                     break;
                 case "width":
-                    tcPr.TableCellWidth = new TableCellWidth { Width = ParseHelpers.SafeParseUint(value, "width").ToString(), Type = TableWidthUnitValues.Dxa };
+                    // BUG-DUMP6-04: accept "N%" alongside bare twips so dump→batch
+                    // round-trips pct cell widths. OOXML stores pct as fifths-of-percent.
+                    if (value.EndsWith('%') &&
+                        double.TryParse(value.AsSpan(0, value.Length - 1),
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var pctW))
+                    {
+                        tcPr.TableCellWidth = new TableCellWidth
+                        {
+                            Width = ((int)Math.Round(pctW * 50)).ToString(),
+                            Type = TableWidthUnitValues.Pct
+                        };
+                    }
+                    else
+                    {
+                        tcPr.TableCellWidth = new TableCellWidth { Width = ParseHelpers.SafeParseUint(value, "width").ToString(), Type = TableWidthUnitValues.Dxa };
+                    }
                     break;
                 case "padding":
                 {

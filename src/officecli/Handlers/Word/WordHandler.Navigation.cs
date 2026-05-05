@@ -2417,8 +2417,19 @@ public partial class WordHandler
                 }
             }
             // Width
+            // BUG-DUMP6-04: preserve w:tcW @type semantics. Mirror the table-level
+            // width readback above (line ~1930) — pct widths are stored as
+            // fifths-of-percent, so divide by 50 and append '%' so dump→batch
+            // can recognize and re-emit pct cell widths.
             if (tcPr.TableCellWidth?.Width?.Value != null)
-                node.Format["width"] = tcPr.TableCellWidth.Width.Value;
+            {
+                var cwType = tcPr.TableCellWidth.Type?.Value;
+                if (cwType == TableWidthUnitValues.Pct
+                    && int.TryParse(tcPr.TableCellWidth.Width.Value, out var pctRaw))
+                    node.Format["width"] = (pctRaw / 50) + "%";
+                else
+                    node.Format["width"] = tcPr.TableCellWidth.Width.Value;
+            }
             // Vertical alignment
             if (tcPr.TableCellVerticalAlignment?.Val?.Value != null)
                 node.Format["valign"] = tcPr.TableCellVerticalAlignment.Val.InnerText;

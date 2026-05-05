@@ -344,7 +344,27 @@ public partial class WordHandler
         var newCell = new TableCell(cellParagraph);
 
         if (properties.TryGetValue("width", out var cellWidth))
-            newCell.PrependChild(new TableCellProperties(new TableCellWidth { Width = cellWidth, Type = TableWidthUnitValues.Dxa }));
+        {
+            // BUG-DUMP6-04: accept "N%" alongside bare twips so dump→batch
+            // round-trips pct cell widths. OOXML stores pct as fifths-of-percent.
+            TableCellWidth tcw;
+            if (cellWidth.EndsWith('%') &&
+                double.TryParse(cellWidth.AsSpan(0, cellWidth.Length - 1),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var pctCw))
+            {
+                tcw = new TableCellWidth
+                {
+                    Width = ((int)Math.Round(pctCw * 50)).ToString(),
+                    Type = TableWidthUnitValues.Pct
+                };
+            }
+            else
+            {
+                tcw = new TableCellWidth { Width = cellWidth, Type = TableWidthUnitValues.Dxa };
+            }
+            newCell.PrependChild(new TableCellProperties(tcw));
+        }
 
         // Dotted-key fallback for tcPr-level attrs (shd.fill, etc.) not
         // modeled by hand-rolled blocks. Lazy-create tcPr if any dotted
