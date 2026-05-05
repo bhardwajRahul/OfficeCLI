@@ -2524,6 +2524,8 @@ public partial class WordHandler
         }
         if (trPr.GetFirstChild<TableHeader>() != null)
             node.Format["header"] = true;
+        if (trPr.GetFirstChild<CantSplit>() != null)
+            node.Format["cantSplit"] = true;
     }
 
     private static void ReadCellProps(TableCell cell, DocumentNode node)

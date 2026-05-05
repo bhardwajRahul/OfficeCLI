@@ -1475,6 +1475,15 @@ public partial class WordHandler
                     else
                         trPr.RemoveAllChildren<TableHeader>();
                     break;
+                case "cantsplit":
+                    if (IsTruthy(value))
+                    {
+                        if (trPr.GetFirstChild<CantSplit>() == null)
+                            trPr.AppendChild(new CantSplit());
+                    }
+                    else
+                        trPr.RemoveAllChildren<CantSplit>();
+                    break;
                 default:
                     // c1, c2, ... shorthand: set text of specific cell by index
                     if (key.Length >= 2 && key[0] == 'c' && int.TryParse(key.AsSpan(1), out var cIdx))
@@ -1495,7 +1504,7 @@ public partial class WordHandler
                     }
                     else if (!GenericXmlQuery.TryCreateTypedChild(trPr, key, value))
                         unsupported.Add(unsupported.Count == 0
-                            ? $"{key} (valid row props: height, height.exact, header, c1, c2, ...)"
+                            ? $"{key} (valid row props: height, height.exact, header, cantSplit, c1, c2, ...)"
                             : key);
                     break;
             }
