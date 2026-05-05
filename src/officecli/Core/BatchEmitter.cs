@@ -1653,11 +1653,51 @@ public static class BatchEmitter
             borderFold[side] = cur;
         }
 
+        // CONSISTENCY(padding-fold): Get surfaces default cell margin as
+        // `padding.top/bottom/left/right` on the table node (per-side OOXML
+        // attribute decomposition). AddTable accepts only a single `padding`
+        // scalar applied uniformly to all four sides. Without folding, every
+        // table with non-default cell margin emitted four UNSUPPORTED
+        // padding.* keys on `add table`. Fold into a single `padding` when
+        // all four sides are equal; otherwise drop (per-side asymmetric
+        // padding is a follow-up — AddTable can't express it today).
+        string? paddingFolded = null;
+        bool paddingFoldable = false;
+        {
+            string? top = null, bot = null, left = null, right = null;
+            foreach (var (k, v) in raw)
+            {
+                if (v == null) continue;
+                if (string.Equals(k, "padding.top", StringComparison.OrdinalIgnoreCase)) top = v.ToString();
+                else if (string.Equals(k, "padding.bottom", StringComparison.OrdinalIgnoreCase)) bot = v.ToString();
+                else if (string.Equals(k, "padding.left", StringComparison.OrdinalIgnoreCase)) left = v.ToString();
+                else if (string.Equals(k, "padding.right", StringComparison.OrdinalIgnoreCase)) right = v.ToString();
+            }
+            if (top != null && top == bot && top == left && top == right)
+            {
+                paddingFolded = top;
+                paddingFoldable = true;
+            }
+            else if (top != null || bot != null || left != null || right != null)
+            {
+                // Asymmetric — drop sub-keys without folding (AddTable cannot
+                // express per-side padding). Mark foldable=true so the loop
+                // below skips the sub-keys.
+                paddingFoldable = true;
+            }
+        }
+
         foreach (var (key, val) in raw)
         {
             if (SkipKeys.Contains(key)) continue;
             if (key.StartsWith("effective.", StringComparison.OrdinalIgnoreCase)) continue;
             if (key.EndsWith(".cs.source", StringComparison.OrdinalIgnoreCase)) continue;
+
+            // padding.* fold: drop sub-keys; emit single `padding` if uniform.
+            if (paddingFoldable && key.StartsWith("padding.", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
             // pbdr fold: skip subkeys, rewrite the bare side key into colon form.
             if (key.StartsWith("pbdr.", StringComparison.OrdinalIgnoreCase))
@@ -1726,6 +1766,8 @@ public static class BatchEmitter
             };
             if (s.Length > 0) result[key] = s;
         }
+        if (paddingFolded != null && !result.ContainsKey("padding"))
+            result["padding"] = paddingFolded;
         return result;
     }
 
