@@ -1676,7 +1676,16 @@ public static class BatchEmitter
                 break;
             }
             default:
-                // Unknown field code — let the generic field add try.
+                // BUG-DUMP7-05: AddField's switch has no case for `=`,
+                // numeric expression fields like `= PAGE - 1`, or any other
+                // unrecognised code. Emitting fieldType=<code> would make
+                // replay throw `Unknown field type '<code>'`. Drop the
+                // unhelpful fieldType and pass the full trimmed instruction
+                // through `instr` instead — AddField's raw-instruction
+                // fallback rebuilds the chain verbatim. Drops `fieldType`
+                // entirely so the caller doesn't reject the row up-front.
+                props.Remove("fieldType");
+                props["instr"] = trimmed;
                 break;
         }
         if (!string.IsNullOrEmpty(display))
