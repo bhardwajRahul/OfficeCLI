@@ -1019,6 +1019,18 @@ public static class BatchEmitter
             });
         }
 
+        // BUG-DUMP6-05: a single <w:hyperlink> wrapping N runs surfaces as N
+        // sibling DocumentNodes each carrying the same url/anchor on Format
+        // (Navigation flattens the wrapper). Without coalescing, the loop
+        // below emits N separate `add hyperlink` rows — replay rebuilds N
+        // independent <w:hyperlink> elements, structurally splitting one
+        // hyperlink into many. Group consecutive runs sharing the same
+        // url/anchor into a single synthetic hyperlink-typed entry whose
+        // Text is the concatenated run text. AddHyperlink only consumes
+        // a flat `text` prop, so per-run formatting (bold/italic on a
+        // sub-segment) is lost — accepted v0.5 trade-off, structurally
+        // correct round-trip beats sub-run formatting fidelity.
+        runs = CoalesceHyperlinkRuns(runs);
         foreach (var run in runs)
         {
             // Break run (page / column / textWrapping a.k.a. "line") — emitted
@@ -1413,6 +1425,69 @@ public static class BatchEmitter
     // Non-field children pass through untouched in original order. The TOC
     // chain is handled by the dedicated EmitParagraph branch above and never
     // reaches this collapsing step (early-return in that branch).
+    // BUG-DUMP6-05: collapse consecutive runs sharing the same url/anchor
+    // into a single synthetic node so dump emits ONE `add hyperlink` per
+    // <w:hyperlink>, regardless of how many runs the source wrapped. The
+    // synthesized node carries the merged Text (for AddHyperlink's `text`
+    // prop) and the shared url/anchor/Hyperlink-style format keys.
+    private static List<DocumentNode> CoalesceHyperlinkRuns(List<DocumentNode> runs)
+    {
+        var result = new List<DocumentNode>(runs.Count);
+        int i = 0;
+        while (i < runs.Count)
+        {
+            var run = runs[i];
+            string? url = null, anchor = null;
+            if (run.Type == "run" || run.Type == "r")
+            {
+                if (run.Format.TryGetValue("url", out var u))
+                    url = u?.ToString();
+                if (run.Format.TryGetValue("anchor", out var a))
+                    anchor = a?.ToString();
+            }
+            if (string.IsNullOrEmpty(url) && string.IsNullOrEmpty(anchor))
+            {
+                result.Add(run);
+                i++;
+                continue;
+            }
+            // Walk forward over consecutive runs with the same url/anchor.
+            int j = i + 1;
+            var sb = new System.Text.StringBuilder(run.Text ?? "");
+            while (j < runs.Count)
+            {
+                var next = runs[j];
+                if (next.Type != "run" && next.Type != "r") break;
+                next.Format.TryGetValue("url", out var nUrlObj);
+                next.Format.TryGetValue("anchor", out var nAncObj);
+                var nUrl = nUrlObj?.ToString();
+                var nAnchor = nAncObj?.ToString();
+                if (!string.Equals(nUrl, url, StringComparison.Ordinal)) break;
+                if (!string.Equals(nAnchor, anchor, StringComparison.Ordinal)) break;
+                sb.Append(next.Text ?? "");
+                j++;
+            }
+            if (j == i + 1)
+            {
+                // No coalescing — emit the single run as-is.
+                result.Add(run);
+            }
+            else
+            {
+                var merged = new DocumentNode
+                {
+                    Path = run.Path,
+                    Type = run.Type,
+                    Text = sb.ToString(),
+                    Format = new Dictionary<string, object?>(run.Format, StringComparer.OrdinalIgnoreCase),
+                };
+                result.Add(merged);
+            }
+            i = j;
+        }
+        return result;
+    }
+
     private static List<DocumentNode> CollapseFieldChains(List<DocumentNode> children)
     {
         var result = new List<DocumentNode>();
