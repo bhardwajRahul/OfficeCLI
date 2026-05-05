@@ -1695,20 +1695,34 @@ public partial class WordHandler
 
     /// <summary>Resolve font size from a style chain by styleId. Returns e.g. "10pt" or null.</summary>
     /// <summary>Resolve the dominant font for line-height calculation from a paragraph's runs.</summary>
+    /// <remarks>
+    /// Word's line height = max ratio across every font referenced by every
+    /// run in the line. For typical Chinese docs (rFonts ascii=Calibri
+    /// eastAsia=SimSun) Word uses SimSun's padded ratio, not Calibri's hhea
+    /// ratio — so picking only Ascii silently rendered ~7% tighter than Word.
+    /// We scan Ascii / HighAnsi / EastAsia across all runs and return the
+    /// font with the highest ratio. CSS unitless line-height inheritance then
+    /// scales it per-span by each run's own font-size.
+    /// </remarks>
     private string ResolveParaFontForLineHeight(Paragraph para)
     {
-        // Use the first run's ascii font; fall back to document default
-        var firstRun = para.Elements<Run>().FirstOrDefault();
-        if (firstRun != null)
+        string? best = null;
+        double bestRatio = 0;
+
+        foreach (var run in para.Elements<Run>())
         {
-            var rProps = ResolveEffectiveRunProperties(firstRun, para);
-            var font = rProps.RunFonts?.Ascii?.Value ?? rProps.RunFonts?.HighAnsi?.Value;
-            if (!string.IsNullOrEmpty(font)) return font;
+            var rProps = ResolveEffectiveRunProperties(run, para);
+            var fonts = rProps.RunFonts;
+            if (fonts == null) continue;
+            foreach (var f in new[] { fonts.Ascii?.Value, fonts.HighAnsi?.Value, fonts.EastAsia?.Value })
+            {
+                if (string.IsNullOrEmpty(f)) continue;
+                var r = FontMetricsReader.GetRatio(f);
+                if (r > bestRatio) { bestRatio = r; best = f; }
+            }
         }
-        // Fall back to document default font, then theme MinorFont, then
-        // the Office default. The theme step matters for modern Office docs
-        // (e.g. Aptos) where styles.xml omits an explicit ascii font but
-        // theme1.xml's fontScheme defines it.
+        if (best != null) return best;
+
         var defFont = _doc.MainDocumentPart?.StyleDefinitionsPart?.Styles
             ?.DocDefaults?.RunPropertiesDefault?.RunPropertiesBaseStyle?.RunFonts?.Ascii?.Value;
         return defFont ?? GetThemeMinorLatinFont() ?? OfficeDefaultFonts.MinorLatin;
