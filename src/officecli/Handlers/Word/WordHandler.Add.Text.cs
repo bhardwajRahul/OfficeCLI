@@ -177,6 +177,39 @@ public partial class WordHandler
                 || properties.TryGetValue("font.complexscript", out ntFontCs)
                 || properties.TryGetValue("font.complex", out ntFontCs))
                 ApplyRunFormatting(EnsureNoTextMarkRPr(), "font.cs", ntFontCs);
+            // BUG-DUMP33-02a: theme-font slots on no-text paragraph hoist.
+            // Mirrors the text-run path (font.asciiTheme / font.hAnsiTheme /
+            // font.eaTheme / font.csTheme) so `add p --prop font.eaTheme=...`
+            // writes RunFonts.*Theme on the paragraph mark rPr instead of
+            // falling to TypedAttributeFallback (which can't bind
+            // dotted-theme keys onto the typed RunFonts element).
+            string? ntAsciiTheme = null, ntHAnsiTheme = null, ntEaTheme = null, ntCsTheme = null;
+            if (properties.TryGetValue("font.asciiTheme", out var ntAT) || properties.TryGetValue("font.asciitheme", out ntAT))
+                ntAsciiTheme = ntAT;
+            if (properties.TryGetValue("font.hAnsiTheme", out var ntHAT) || properties.TryGetValue("font.hansitheme", out ntHAT))
+                ntHAnsiTheme = ntHAT;
+            if (properties.TryGetValue("font.eaTheme", out var ntEAT) || properties.TryGetValue("font.eatheme", out ntEAT) || properties.TryGetValue("font.eastasiatheme", out ntEAT))
+                ntEaTheme = ntEAT;
+            if (properties.TryGetValue("font.csTheme", out var ntCST) || properties.TryGetValue("font.cstheme", out ntCST))
+                ntCsTheme = ntCST;
+            if (ntAsciiTheme != null || ntHAnsiTheme != null || ntEaTheme != null || ntCsTheme != null)
+            {
+                var rp = EnsureNoTextMarkRPr();
+                var rf = rp.GetFirstChild<RunFonts>();
+                if (rf == null)
+                {
+                    rf = new RunFonts();
+                    InsertRunPropInSchemaOrder(rp, rf);
+                }
+                if (ntAsciiTheme != null)
+                    rf.AsciiTheme = new EnumValue<ThemeFontValues>(new ThemeFontValues(ntAsciiTheme));
+                if (ntHAnsiTheme != null)
+                    rf.HighAnsiTheme = new EnumValue<ThemeFontValues>(new ThemeFontValues(ntHAnsiTheme));
+                if (ntEaTheme != null)
+                    rf.EastAsiaTheme = new EnumValue<ThemeFontValues>(new ThemeFontValues(ntEaTheme));
+                if (ntCsTheme != null)
+                    rf.ComplexScriptTheme = new EnumValue<ThemeFontValues>(new ThemeFontValues(ntCsTheme));
+            }
         }
         if (properties.TryGetValue("firstlineindent", out var indent) || properties.TryGetValue("firstLineIndent", out indent))
         {
@@ -801,6 +834,16 @@ public partial class WordHandler
                 case "font.cs":
                 case "font.complexscript":
                 case "font.complex":
+                // BUG-DUMP33-02a: theme-font slots — consumed by the no-text
+                // hoist block (or the text-bearing run-creation block when a
+                // run exists). TypedAttributeFallback can't bind these
+                // dotted keys onto RunFonts so they would surface as
+                // UNSUPPORTED on plain `add p`.
+                case "font.asciitheme":
+                case "font.hansitheme":
+                case "font.eatheme":
+                case "font.eastasiatheme":
+                case "font.cstheme":
                 // CS run flags (<w:bCs/> / <w:iCs/> / <w:szCs/>) — the
                 // hoisted block at line 57-74 writes them to the paragraph
                 // mark rPr; the dotted-fallback below would re-flag them
