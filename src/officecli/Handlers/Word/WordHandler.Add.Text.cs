@@ -795,6 +795,32 @@ public partial class WordHandler
                 var sub = key.Substring("markRPr.".Length);
                 var pmRpr = pProps.GetFirstChild<ParagraphMarkRunProperties>()
                     ?? pProps.AppendChild(new ParagraphMarkRunProperties());
+                // BUG-DUMP33-02b: explicit-false markRPr.bold / markRPr.italic
+                // must emit <w:b w:val="false"/> (resp. <w:i w:val="false"/>)
+                // so the paragraph mark overrides a style that asserts
+                // bold/italic. ApplyRunFormatting on its own removes the
+                // element entirely on falsy input — same gap as the no-text
+                // hoist block, fixed there with the IsExplicitFalseAddOverride
+                // path. Mirror that here for round-trip parity.
+                var subLower = sub.ToLowerInvariant();
+                if (subLower == "bold" || subLower == "font.bold")
+                {
+                    pmRpr.RemoveAllChildren<Bold>();
+                    if (IsTruthy(value))
+                        InsertRunPropInSchemaOrder(pmRpr, new Bold());
+                    else if (IsExplicitFalseAddOverride(value))
+                        InsertRunPropInSchemaOrder(pmRpr, new Bold { Val = OnOffValue.FromBoolean(false) });
+                    continue;
+                }
+                if (subLower == "italic" || subLower == "font.italic")
+                {
+                    pmRpr.RemoveAllChildren<Italic>();
+                    if (IsTruthy(value))
+                        InsertRunPropInSchemaOrder(pmRpr, new Italic());
+                    else if (IsExplicitFalseAddOverride(value))
+                        InsertRunPropInSchemaOrder(pmRpr, new Italic { Val = OnOffValue.FromBoolean(false) });
+                    continue;
+                }
                 ApplyRunFormatting(pmRpr, sub, value);
                 continue;
             }
