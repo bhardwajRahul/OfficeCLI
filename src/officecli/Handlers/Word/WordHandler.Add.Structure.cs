@@ -800,6 +800,7 @@ public partial class WordHandler
             "autoRedefine", "autoredefine", "hidden",
             "align", "alignment", "spacebefore", "spaceBefore",
             "spaceafter", "spaceAfter", "linespacing", "lineSpacing",
+            "lineRule", "linerule",
             "font", "size", "bold", "italic", "color",
             "direction", "dir", "bidi",
             "font.ascii", "font.hAnsi", "font.eastAsia", "font.cs",
