@@ -178,6 +178,44 @@ public partial class PowerPointHandler
                 // Count series
                 var cxSeries = cxChartSpace.Descendants<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.Series>().ToList();
                 node.Format["seriesCount"] = cxSeries.Count;
+
+                // Series children — needed by PptxBatchEmitter.EmitChart to
+                // reconstruct the `data="Name:v1,v2;..."` round-trip string.
+                // Standard c:chart populates these via ChartHelper.ReadChartProperties
+                // (depth > 0 branch); extended cx:chart had no analogue and the
+                // emitter wrote `add chart` without `data`, so replay rejected
+                // the chart for missing series data. Mirror the cx data-block
+                // extraction used by ChartSvgRenderer.CxExtract.
+                if (depth > 0)
+                {
+                    var cxData = cxChartSpace.Descendants<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.ChartData>().FirstOrDefault();
+                    foreach (var s in cxSeries)
+                    {
+                        var dataIdVal = s.GetFirstChild<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.DataId>()?.Val?.Value ?? 0;
+                        var dataBlock = cxData?.Elements<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.Data>()
+                            .FirstOrDefault(d => (d.Id?.Value ?? 0) == dataIdVal);
+                        if (dataBlock == null) continue;
+
+                        var sName = s.GetFirstChild<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.Text>()
+                            ?.GetFirstChild<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.TextData>()
+                            ?.GetFirstChild<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.VXsdstring>()?.Text ?? "Series";
+
+                        var vals = dataBlock.Elements<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.NumericDimension>()
+                            .SelectMany(nd => nd.Descendants<DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing.NumericValue>())
+                            .Select(nv => nv.Text ?? "0")
+                            .ToArray();
+                        if (vals.Length == 0) continue;
+
+                        var seriesNode = new DocumentNode
+                        {
+                            Path = $"{node.Path}/series[{node.Children.Count + 1}]",
+                            Type = "series",
+                        };
+                        seriesNode.Format["name"] = sName;
+                        seriesNode.Format["values"] = string.Join(",", vals);
+                        node.Children.Add(seriesNode);
+                    }
+                }
             }
             catch { }
         }
