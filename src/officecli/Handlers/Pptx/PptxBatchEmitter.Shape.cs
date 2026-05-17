@@ -168,12 +168,12 @@ public static partial class PptxBatchEmitter
             // subsequent paragraphs append via `add`. docx body has no
             // equivalent auto-empty seed (AddSection initializes an empty body
             // and AddParagraph appends), so WordBatchEmitter uses pure `add`.
-            EmitParagraph(ppt, para, shapeParent, items, firstParagraph: pIdx == 1);
+            EmitParagraph(ppt, para, shapeParent, pIdx, items, firstParagraph: pIdx == 1);
         }
     }
 
     private static void EmitParagraph(PowerPointHandler ppt, DocumentNode paraNode, string shapeParent,
-                                      List<BatchItem> items, bool firstParagraph)
+                                      int paraIdx, List<BatchItem> items, bool firstParagraph)
     {
         var props = FilterEmittableProps(paraNode.Format);
         var runs = (paraNode.Children ?? new List<DocumentNode>())
@@ -239,11 +239,13 @@ public static partial class PptxBatchEmitter
                 Type = "paragraph",
                 Props = props.Count > 0 ? props : null,
             });
-            // Target parent path for runs is the just-emitted paragraph.
-            // PowerPointHandler accepts /slide[N]/shape[M]/paragraph[last()] —
-            // CONSISTENCY(path-last): docx uses the same construct on
+            // Target parent path for runs is the just-emitted paragraph at
+            // its known positional index (paraIdx). Earlier code used
+            // paragraph[last()] but the resolver doesn't walk into a
+            // placeholder's txBody to find paragraphs, so explicit index
+            // is the portable form.
             // /body/p[last()].
-            paraParent = $"{shapeParent}/paragraph[last()]";
+            paraParent = $"{shapeParent}/paragraph[{paraIdx}]";
         }
 
         foreach (var run in runs)

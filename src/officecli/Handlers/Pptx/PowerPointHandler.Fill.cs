@@ -464,11 +464,28 @@ public partial class PowerPointHandler
             "stripedrightarrow" => Drawing.ShapeTypeValues.StripedRightArrow,
             "uturnarrow" => Drawing.ShapeTypeValues.UTurnArrow,
             "circulararrow" => Drawing.ShapeTypeValues.CircularArrow,
-            _ => throw new ArgumentException(
-                $"Unknown preset shape: '{name}'. Common presets: rect, roundRect, ellipse, triangle, diamond, " +
-                "pentagon, hexagon, star5, rightArrow, leftArrow, chevron, plus, heart, cloud, cube, can, line, " +
-                "callout, process, decision, smiley, frame, gear6")
+            // ParsePresetShape can't enumerate all ~180 OOXML preset values by hand.
+            // Fall back to reflection lookup on Drawing.ShapeTypeValues static
+            // properties so dump-replay survives preset names absent from the
+            // hand-rolled list (pie, chord, blockArc, mathDivide, callouts, …).
+            // Last-resort degrade is Rectangle so a single missing preset never
+            // takes the whole shape add down (which would cascade positional refs).
+            _ => ResolveShapeTypeByReflection(name) ?? Drawing.ShapeTypeValues.Rectangle,
         };
+
+    private static Drawing.ShapeTypeValues? ResolveShapeTypeByReflection(string name)
+    {
+        var lower = name.ToLowerInvariant();
+        var props = typeof(Drawing.ShapeTypeValues).GetProperties(
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        foreach (var p in props)
+        {
+            if (p.PropertyType != typeof(Drawing.ShapeTypeValues)) continue;
+            if (string.Equals(p.Name, lower, StringComparison.OrdinalIgnoreCase))
+                return (Drawing.ShapeTypeValues?)p.GetValue(null);
+        }
+        return null;
+    }
 
     // BUG-FIX(B8): canonical names mirror OOXML LineEndValues so that the
     // value passed to Add/Set round-trips through Get. The previous mapping

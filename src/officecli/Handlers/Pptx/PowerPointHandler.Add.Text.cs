@@ -333,23 +333,48 @@ public partial class PowerPointHandler
     private string AddRun(string parentPath, int? index, Dictionary<string, string> properties)
     {
                 // Add a run to a paragraph: /slide[N]/shape[M]/paragraph[P] or /slide[N]/shape[M]
+                //   also: /slide[N]/placeholder[X]/paragraph[P] or /slide[N]/placeholder[X]
                 // CONSISTENCY(path-aliases): accept short-form `/p[N]` alongside `/paragraph[N]`.
+                // CONSISTENCY(placeholder-paragraph-path): mirror the dual route that
+                // AddParagraph and SetParagraph already accept.
                 var runParaMatch = Regex.Match(parentPath, @"^/slide\[(\d+)\]/shape\[(\d+)\](?:/(?:paragraph|p)\[(\d+)\])?$");
-                if (!runParaMatch.Success)
-                    throw new ArgumentException("Runs must be added to a shape or paragraph: /slide[N]/shape[M] or /slide[N]/shape[M]/paragraph[P]");
+                var runPhMatch = runParaMatch.Success ? null : Regex.Match(parentPath, @"^/slide\[(\d+)\]/placeholder\[(\w+)\](?:/(?:paragraph|p)\[(\d+)\])?$");
+                if (!runParaMatch.Success && (runPhMatch == null || !runPhMatch.Success))
+                    throw new ArgumentException("Runs must be added to a shape/placeholder or paragraph: /slide[N]/shape[M], /slide[N]/placeholder[X], /slide[N]/shape[M]/paragraph[P], or /slide[N]/placeholder[X]/paragraph[P]");
 
-                var runSlideIdx = int.Parse(runParaMatch.Groups[1].Value);
-                var runShapeIdx = int.Parse(runParaMatch.Groups[2].Value);
-                var (runSlidePart, runShape) = ResolveShape(runSlideIdx, runShapeIdx);
+                SlidePart runSlidePart;
+                Shape runShape;
+                int runSlideIdx;
+                int runShapeIdx;
+                System.Text.RegularExpressions.Group paraGroup;
+                if (runParaMatch.Success)
+                {
+                    runSlideIdx = int.Parse(runParaMatch.Groups[1].Value);
+                    runShapeIdx = int.Parse(runParaMatch.Groups[2].Value);
+                    (runSlidePart, runShape) = ResolveShape(runSlideIdx, runShapeIdx);
+                    paraGroup = runParaMatch.Groups[3];
+                }
+                else
+                {
+                    runSlideIdx = int.Parse(runPhMatch!.Groups[1].Value);
+                    var phToken = runPhMatch.Groups[2].Value;
+                    var slideParts = GetSlideParts().ToList();
+                    if (runSlideIdx < 1 || runSlideIdx > slideParts.Count)
+                        throw new ArgumentException($"Slide {runSlideIdx} not found (total: {slideParts.Count})");
+                    runSlidePart = slideParts[runSlideIdx - 1];
+                    runShape = ResolvePlaceholderShape(runSlidePart, phToken);
+                    runShapeIdx = 1;
+                    paraGroup = runPhMatch.Groups[3];
+                }
 
                 var runTextBody = runShape.TextBody
                     ?? throw new InvalidOperationException("Shape has no text body");
 
                 Drawing.Paragraph targetPara;
                 int targetParaIdx;
-                if (runParaMatch.Groups[3].Success)
+                if (paraGroup.Success)
                 {
-                    targetParaIdx = int.Parse(runParaMatch.Groups[3].Value);
+                    targetParaIdx = int.Parse(paraGroup.Value);
                     var paras = runTextBody.Elements<Drawing.Paragraph>().ToList();
                     if (targetParaIdx < 1 || targetParaIdx > paras.Count)
                         throw new ArgumentException($"Paragraph {targetParaIdx} not found");
