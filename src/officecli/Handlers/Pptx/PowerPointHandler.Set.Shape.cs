@@ -629,6 +629,60 @@ public partial class PowerPointHandler
         return ApplyShapePropsCore(slidePart, innerShapes[shapeIdx - 1], properties);
     }
 
+    /// <summary>
+    /// Resolve a Shape nested inside a group on a slide and return it
+    /// alongside the owning SlidePart. Used by group-paragraph / group-run
+    /// setters so the dispatch tier can pass control to the existing
+    /// SetParagraphOnShape / SetParagraphRunOnShape helpers without
+    /// duplicating navigation logic.
+    /// </summary>
+    private (SlidePart slidePart, Shape shape) ResolveGroupInnerShape(int slideIdx, int grpIdx, int shapeIdx)
+    {
+        var slideParts = GetSlideParts().ToList();
+        if (slideIdx < 1 || slideIdx > slideParts.Count)
+            throw new ArgumentException($"Slide {slideIdx} not found (total: {slideParts.Count})");
+        var slidePart = slideParts[slideIdx - 1];
+        var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree
+            ?? throw new ArgumentException("Slide has no shape tree");
+        var groups = shapeTree.Elements<GroupShape>().ToList();
+        if (grpIdx < 1 || grpIdx > groups.Count)
+            throw new ArgumentException($"Group {grpIdx} not found (total: {groups.Count})");
+        var grp = groups[grpIdx - 1];
+        var innerShapes = grp.Elements<Shape>().ToList();
+        if (shapeIdx < 1 || shapeIdx > innerShapes.Count)
+            throw new ArgumentException($"Shape {shapeIdx} not found in group {grpIdx} (total: {innerShapes.Count})");
+        return (slidePart, innerShapes[shapeIdx - 1]);
+    }
+
+    /// <summary>
+    /// /slide[N]/group[M]/shape[K]/paragraph[P] — mirrors SetParagraphByPath
+    /// but navigates into a group first.
+    /// </summary>
+    private List<string> SetGroupParagraphByPath(Match m, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(m.Groups[1].Value);
+        var grpIdx = int.Parse(m.Groups[2].Value);
+        var shapeIdx = int.Parse(m.Groups[3].Value);
+        var paraIdx = int.Parse(m.Groups[4].Value);
+        var (slidePart, shape) = ResolveGroupInnerShape(slideIdx, grpIdx, shapeIdx);
+        return SetParagraphOnShape(slidePart, shape, paraIdx, properties);
+    }
+
+    /// <summary>
+    /// /slide[N]/group[M]/shape[K]/paragraph[P]/run[R] — mirrors
+    /// SetParagraphRunByPath but navigates into a group first.
+    /// </summary>
+    private List<string> SetGroupParagraphRunByPath(Match m, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(m.Groups[1].Value);
+        var grpIdx = int.Parse(m.Groups[2].Value);
+        var shapeIdx = int.Parse(m.Groups[3].Value);
+        var paraIdx = int.Parse(m.Groups[4].Value);
+        var runIdx = int.Parse(m.Groups[5].Value);
+        var (slidePart, shape) = ResolveGroupInnerShape(slideIdx, grpIdx, shapeIdx);
+        return SetParagraphRunOnShape(slidePart, shape, paraIdx, runIdx, properties);
+    }
+
     private List<string> ApplyShapePropsCore(SlidePart slidePart, Shape shape, Dictionary<string, string> properties)
     {
         // Handle z-order first (changes shape position in tree)

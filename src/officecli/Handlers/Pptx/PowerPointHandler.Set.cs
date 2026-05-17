@@ -285,6 +285,19 @@ public partial class PowerPointHandler
         var cxnMatch = Regex.Match(path, @"^/slide\[(\d+)\]/(?:connector|connection)\[(\d+)\]$");
         if (cxnMatch.Success) return SetConnectorByPath(cxnMatch, properties);
 
+        // Try group inner paragraph/run path: /slide[N]/group[M]/shape[K]/paragraph[P]/run[R]
+        // CONSISTENCY(group-inner-shape): Get supports the nested paragraph/run
+        // path on shapes inside a group; Set used to fall through to the
+        // generic XML fallback which navigates by LocalName and cannot find
+        // "group" (real element is p:grpSp). Route explicitly to the same
+        // helpers used by /slide[N]/shape[K]/paragraph[P][/run[R]].
+        var grpParaRunMatch = Regex.Match(path, @"^/slide\[(\d+)\]/group\[(\d+)\]/shape\[(\d+)\]/(?:paragraph|p)\[(\d+)\]/(?:run|r)\[(\d+)\]$");
+        if (grpParaRunMatch.Success) return SetGroupParagraphRunByPath(grpParaRunMatch, properties);
+
+        // Try group inner paragraph path: /slide[N]/group[M]/shape[K]/paragraph[P]
+        var grpParaMatch = Regex.Match(path, @"^/slide\[(\d+)\]/group\[(\d+)\]/shape\[(\d+)\]/(?:paragraph|p)\[(\d+)\]$");
+        if (grpParaMatch.Success) return SetGroupParagraphByPath(grpParaMatch, properties);
+
         // Try group inner shape path: /slide[N]/group[M]/shape[K]
         // CONSISTENCY(group-inner-shape): Get supports this; Set must too.
         var grpInnerShapeMatch = Regex.Match(path, @"^/slide\[(\d+)\]/group\[(\d+)\]/shape\[(\d+)\]$");
