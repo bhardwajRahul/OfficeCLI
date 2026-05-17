@@ -616,7 +616,24 @@ public partial class PowerPointHandler
             return v.Length > 5;
 
         var parts = v.Split('-');
-        return parts.Length >= 2 && IsHexColorString(parts[0]);
+        return parts.Length >= 2 && IsGradientStopFirstToken(parts[0]);
+    }
+
+    /// <summary>
+    /// First token in a "C1-C2[-...]" gradient string can be either an inline
+    /// hex color or a scheme color name (accent1, dark1, hyperlink, …). The
+    /// hex check alone caused scheme-color gradients to be routed to the
+    /// solid-fill path with the bare "accent1-accent2" string, which then
+    /// failed sanitization. Treat any recognized OOXML scheme color as a
+    /// gradient color, so detection matches what BuildGradientFill accepts.
+    /// </summary>
+    private static bool IsGradientStopFirstToken(string s)
+    {
+        if (IsHexColorString(s)) return true;
+        // Strip @position suffix used for gradient stops (e.g. "accent1@50").
+        var at = s.IndexOf('@');
+        var name = at >= 0 ? s[..at] : s;
+        return ParseHelpers.IsSchemeColorName(name);
     }
 
     private static bool IsHexColorString(string s)
