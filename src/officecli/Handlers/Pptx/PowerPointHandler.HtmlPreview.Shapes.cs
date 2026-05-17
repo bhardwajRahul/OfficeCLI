@@ -907,24 +907,39 @@ public partial class PowerPointHandler
 
     // ==================== Connector Rendering ====================
 
-    private static void RenderConnector(StringBuilder sb, ConnectionShape cxn, Dictionary<string, string> themeColors, string? dataPath = null)
-        => RenderConnector(sb, cxn.ShapeProperties, themeColors, dataPath);
+    private static void RenderConnector(StringBuilder sb, ConnectionShape cxn, Dictionary<string, string> themeColors, string? dataPath = null,
+        (long x, long y, long cx, long cy)? overridePos = null)
+        => RenderConnector(sb, cxn.ShapeProperties, themeColors, dataPath, overridePos);
 
     // Shared SVG line/polyline/path renderer for both <p:cxnSp> connectors and
     // <p:sp> shapes with prst="line". Reads geometry + outline from a
     // ShapeProperties and emits a connector-style div.
-    private static void RenderConnector(StringBuilder sb, ShapeProperties? spPr, Dictionary<string, string> themeColors, string? dataPath = null)
+    // overridePos: when rendering inside a group, the caller supplies coordinates
+    // already transformed into the group's child coordinate system (see RenderShape /
+    // RenderPicture's parallel parameter). Without it the connector's raw slide-absolute
+    // EMU coords are emitted as offsets from the group container — placing the line
+    // far outside the group div, where it disappears.
+    private static void RenderConnector(StringBuilder sb, ShapeProperties? spPr, Dictionary<string, string> themeColors, string? dataPath = null,
+        (long x, long y, long cx, long cy)? overridePos = null)
     {
         var xfrm = spPr?.Transform2D;
-        if (xfrm?.Offset == null || xfrm?.Extents == null) return;
+        if (overridePos == null && (xfrm?.Offset == null || xfrm?.Extents == null)) return;
 
-        var x = xfrm.Offset.X?.Value ?? 0;
-        var y = xfrm.Offset.Y?.Value ?? 0;
-        var cx = xfrm.Extents.Cx?.Value ?? 0;
-        var cy = xfrm.Extents.Cy?.Value ?? 0;
+        long x, y, cx, cy;
+        if (overridePos != null)
+        {
+            (x, y, cx, cy) = overridePos.Value;
+        }
+        else
+        {
+            x = xfrm!.Offset!.X?.Value ?? 0;
+            y = xfrm.Offset.Y?.Value ?? 0;
+            cx = xfrm.Extents!.Cx?.Value ?? 0;
+            cy = xfrm.Extents.Cy?.Value ?? 0;
+        }
 
-        var flipH = xfrm.HorizontalFlip?.Value == true;
-        var flipV = xfrm.VerticalFlip?.Value == true;
+        var flipH = xfrm?.HorizontalFlip?.Value == true;
+        var flipV = xfrm?.VerticalFlip?.Value == true;
 
         // SVG line
         var outline = spPr?.GetFirstChild<Drawing.Outline>();
@@ -1164,7 +1179,14 @@ public partial class PowerPointHandler
                 }
                 case ConnectionShape cxn:
                 {
-                    RenderConnector(sb, cxn, themeColors);
+                    // CONSISTENCY(group-child-pos): mirror Shape/Picture branches above —
+                    // a connector inside a group must have its slide-absolute EMU coords
+                    // re-projected into the group's child coordinate system. Previously
+                    // the raw coords were emitted as offsets inside the group div, which
+                    // placed the connector far outside the group (invisible).
+                    var pos = CalcGroupChildPos(cxn.ShapeProperties?.Transform2D, offX, offY, scaleX, scaleY);
+                    if (pos.HasValue)
+                        RenderConnector(sb, cxn, themeColors, dataPath: null, overridePos: pos);
                     break;
                 }
             }
@@ -1250,8 +1272,13 @@ public partial class PowerPointHandler
                     break;
                 }
                 case ConnectionShape cxn:
-                    RenderConnector(sb, cxn, themeColors);
+                {
+                    // CONSISTENCY(group-child-pos): see RenderGroup ConnectionShape branch.
+                    var pos = CalcGroupChildPos(cxn.ShapeProperties?.Transform2D, offX, offY, scaleX, scaleY);
+                    if (pos.HasValue)
+                        RenderConnector(sb, cxn, themeColors, dataPath: null, overridePos: pos);
                     break;
+                }
             }
         }
 
