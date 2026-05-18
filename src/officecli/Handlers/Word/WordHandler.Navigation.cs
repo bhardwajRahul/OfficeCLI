@@ -2861,6 +2861,17 @@ public partial class WordHandler
                     if (tblLookRead.NoVerticalBand?.HasValue == true && !tblLookRead.NoVerticalBand.Value)
                         node.Format["bandedCols"] = true;
                 }
+
+                // Accessibility: table caption / description. Set writes
+                // <w:tblCaption w:val="…"/> and <w:tblDescription w:val="…"/>
+                // (see Set.Element.cs table branch). Without the readback,
+                // get/dump silently drops these on round-trip.
+                var tblCaption = tp.GetFirstChild<TableCaption>();
+                if (!string.IsNullOrEmpty(tblCaption?.Val?.Value))
+                    node.Format["caption"] = tblCaption.Val.Value!;
+                var tblDescription = tp.GetFirstChild<TableDescription>();
+                if (!string.IsNullOrEmpty(tblDescription?.Val?.Value))
+                    node.Format["description"] = tblDescription.Val.Value!;
             }
 
             // Column widths from grid
