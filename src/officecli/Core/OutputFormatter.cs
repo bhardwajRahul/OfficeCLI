@@ -331,6 +331,30 @@ internal static class OutputFormatter
             return;
         }
 
+        // Pattern: "Row <N> in cell reference '...' is out of valid range. …" /
+        // "Column '<X>' in cell reference '...' is out of range. …" —
+        // raised by ParseCellReference (ExcelHandler.Selector.cs) when a
+        // cell address overshoots Excel's XFD1048576 ceiling. The Set
+        // path already coerces row overflow into invalid_value via its
+        // "Invalid row index N." text; the Add path runs through
+        // ParseCellReference and previously fell through to
+        // internal_error. Map both shapes to invalid_value so add/set
+        // produce the same business code for the same overflow class.
+        if (msg.StartsWith("Row ", StringComparison.Ordinal)
+            && msg.Contains(" in cell reference ", StringComparison.Ordinal)
+            && msg.Contains(" out of ", StringComparison.Ordinal))
+        {
+            result.Code = "invalid_value";
+            return;
+        }
+        if (msg.StartsWith("Column '", StringComparison.Ordinal)
+            && msg.Contains(" in cell reference ", StringComparison.Ordinal)
+            && msg.Contains(" out of range", StringComparison.Ordinal))
+        {
+            result.Code = "invalid_value";
+            return;
+        }
+
         // Pattern: "Invalid font size: ..." / "Invalid color value: ..." / "Invalid ... value"
         if (msg.StartsWith("Invalid "))
         {
