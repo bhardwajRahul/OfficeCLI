@@ -125,6 +125,14 @@ internal static class DrawingColorBuilder
                 if (raw < 0 || raw > 100000)
                     throw new ArgumentException(
                         $"Invalid color transform '{token}': raw value {raw} out of range 0-100000 (OOXML ST_PositivePercentage).");
+                // OOXML raw units are 1/1000 of a percent. Integer division
+                // truncates values 1..999 to 0 (lumMod=75 raw → 0 instead of
+                // 7.5%). Reject sub-1000 raw values so callers can't silently
+                // get a no-op; the percentage form (lumModN, N=0..100) covers
+                // that range with full precision.
+                if (raw > 0 && raw < 1000)
+                    throw new ArgumentException(
+                        $"Invalid color transform '{token}': raw value {raw} below 1000 truncates to 0%; use percentage form '{name}{raw / 1000}' or raw value >= 1000.");
                 pct = raw / 1000;
             }
             else
