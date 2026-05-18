@@ -1063,10 +1063,36 @@ internal static partial class ChartHelper
                 {
                     var plotArea2 = chart.GetFirstChild<C.PlotArea>();
                     if (plotArea2 == null) { unsupported.Add(key); break; }
-                    // value = series indices on secondary axis, e.g. "2,3" (1-based)
-                    var secondaryIndices = value.Split(',')
-                        .Select(s => int.TryParse(s.Trim(), out var v) ? v : -1)
-                        .Where(v => v > 0).ToHashSet();
+                    // R24 — bare "true"/"false" support so the older dump emit
+                    // shape (which lost which-series-on-secondary) still
+                    // round-trips. "true" routes every non-first series to
+                    // the secondary axis (the most common author intent);
+                    // "false"/"none" is a no-op when the chart isn't already
+                    // split (and a structural rebuild back to single-axis is
+                    // out of scope here).
+                    HashSet<int> secondaryIndices;
+                    if (value.Equals("true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var totalSeries = plotArea2.Descendants<OpenXmlCompositeElement>()
+                            .Count(e => e.LocalName == "ser");
+                        secondaryIndices = new HashSet<int>(Enumerable.Range(2, Math.Max(0, totalSeries - 1)));
+                    }
+                    else if (value.Equals("false", StringComparison.OrdinalIgnoreCase)
+                          || value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // No-op: a "no secondary axis" state is the default;
+                        // demoting an already-split chart back to single-axis
+                        // would require a full rebuild path that doesn't yet
+                        // exist. Skip rather than corrupt.
+                        break;
+                    }
+                    else
+                    {
+                        // value = series indices on secondary axis, e.g. "2,3" (1-based)
+                        secondaryIndices = value.Split(',')
+                            .Select(s => int.TryParse(s.Trim(), out var v) ? v : -1)
+                            .Where(v => v > 0).ToHashSet();
+                    }
                     ApplySecondaryAxis(plotArea2, secondaryIndices);
                     break;
                 }

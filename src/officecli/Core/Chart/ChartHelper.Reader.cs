@@ -225,9 +225,48 @@ internal static partial class ChartHelper
             if (axisFontStr != null) node.Format["axisFont"] = axisFontStr;
         }
 
-        // Secondary axis
+        // Secondary axis — emit the 1-based series indices bound to the
+        // secondary axis so dump→replay round-trips. The Setter expects
+        // "1,3" form (series indices); emitting bare "true" silently failed
+        // parsing on replay because every comma-split token tried as int
+        // produced [-1] then was filtered out.
         var valAxes = plotArea.Elements<C.ValueAxis>().ToList();
-        if (valAxes.Count > 1) node.Format["secondaryAxis"] = "true";
+        if (valAxes.Count > 1)
+        {
+            // Map AxisId -> rank by document order; rank 0 = primary, 1 = secondary.
+            var axisRank = new Dictionary<uint, int>();
+            for (int ai = 0; ai < valAxes.Count; ai++)
+            {
+                var axId = valAxes[ai].GetFirstChild<C.AxisId>()?.Val?.Value;
+                if (axId.HasValue) axisRank[axId.Value] = ai;
+            }
+            // Walk every series across every chart-type child of plotArea;
+            // series indices are 1-based in document order matching how
+            // ApplySecondaryAxis enumerates them.
+            var secIdx = new List<int>();
+            int seriesIdx = 0;
+            foreach (var ct in plotArea.Elements<OpenXmlCompositeElement>())
+            {
+                foreach (var ser in ct.Elements<OpenXmlCompositeElement>()
+                    .Where(e => e.LocalName == "ser"))
+                {
+                    seriesIdx++;
+                    var seriesAxisIds = ser.Parent?.Elements<C.AxisId>().ToList()
+                        ?? new List<C.AxisId>();
+                    // A series's axis is determined by its parent chart-type
+                    // element's c:axId children; primary vs secondary depends
+                    // on which value-axis those IDs match.
+                    var binds = seriesAxisIds
+                        .Select(a => a.Val?.Value)
+                        .Where(v => v.HasValue && axisRank.ContainsKey(v.Value))
+                        .Select(v => axisRank[v!.Value]);
+                    if (binds.Any(r => r >= 1)) secIdx.Add(seriesIdx);
+                }
+            }
+            node.Format["secondaryAxis"] = secIdx.Count > 0
+                ? string.Join(",", secIdx)
+                : "true"; // Fallback only if we couldn't resolve any series.
+        }
 
         // Axis label rotation (txPr/bodyPr/@rot in 60000ths of a degree)
         var catAxisForRot = (OpenXmlElement?)plotArea.GetFirstChild<C.CategoryAxis>()
