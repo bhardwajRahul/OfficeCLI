@@ -315,6 +315,16 @@ public partial class ExcelHandler
 
         if (properties.TryGetValue("formula2", out var dvFormula2))
             dv.Formula2 = new Formula2(NormalizeValidationFormula(dvFormula2, dv.Type?.Value));
+        else if (dv.Operator?.Value == DataValidationOperatorValues.Between
+                 || dv.Operator?.Value == DataValidationOperatorValues.NotBetween)
+        {
+            // operator=between/notBetween needs both bounds. Without formula2
+            // Excel silently treats the rule as "anything passes" — the file
+            // opens but validates nothing. Reject up front rather than land a
+            // permissive no-op on disk.
+            throw new ArgumentException(
+                $"Property 'formula2' is required when operator='{dv.Operator.InnerText}'; supply both bounds (formula1=lower, formula2=upper).");
+        }
 
         // Build case-insensitive lookup for validation properties
         var dvProps = new Dictionary<string, string>(properties, StringComparer.OrdinalIgnoreCase);
