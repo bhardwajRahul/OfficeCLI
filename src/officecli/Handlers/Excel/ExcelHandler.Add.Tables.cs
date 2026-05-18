@@ -48,6 +48,12 @@ public partial class ExcelHandler
         // reference. Otherwise Excel rejects the file with 0x800A03EC.
         if (!System.Text.RegularExpressions.Regex.IsMatch(nrName, @"^[A-Za-z_\\][A-Za-z0-9_\\.]*$"))
             throw new ArgumentException($"Invalid defined-name '{nrName}': must start with a letter/underscore and contain only letters, digits, underscores, or periods (no spaces).");
+        // Excel caps defined-name identifier length at 255 characters; longer
+        // names are silently truncated on open (or the file is rejected with
+        // 0x800A03EC depending on host). Refuse up front instead of letting
+        // a 256+ char name land on disk and round-trip-differ on re-open.
+        if (nrName.Length > 255)
+            throw new ArgumentException($"Invalid defined-name '{nrName}': length {nrName.Length} exceeds the Excel 255-character limit.");
         if (LooksLikeCellReference(nrName))
             throw new ArgumentException($"Invalid defined-name '{nrName}': name parses as a cell reference; choose a different name.");
         // R39-5: Excel reserves the single letters R and C (case-insensitive)
