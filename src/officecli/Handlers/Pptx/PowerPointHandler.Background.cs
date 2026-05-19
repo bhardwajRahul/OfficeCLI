@@ -596,6 +596,27 @@ public partial class PowerPointHandler
     /// </summary>
     private static string NormalizeGradientValue(string value)
     {
+        // CONSISTENCY(gradient-angle-separator): chart series gradients emit
+        // `C1-C2:ANGLE` (colon-separated angle) while shape gradients use the
+        // dash-separated `C1-C2-ANGLE` form. Users (and dump→batch replay)
+        // legitimately confuse the two — accept the colon form on shape input
+        // and normalize to the canonical dash form so the existing linear
+        // parser unwraps it. Get/dump still emit each surface's canonical
+        // separator unchanged (dash for shape, colon for chart) to preserve
+        // round-trip and schema expectations.
+        if (!value.StartsWith("radial:", StringComparison.OrdinalIgnoreCase)
+            && !value.StartsWith("path:", StringComparison.OrdinalIgnoreCase)
+            && !value.StartsWith("linear;", StringComparison.OrdinalIgnoreCase))
+        {
+            var colonIdx = value.LastIndexOf(':');
+            if (colonIdx > 0 && colonIdx < value.Length - 1)
+            {
+                var tail = value[(colonIdx + 1)..];
+                if (int.TryParse(tail, out var angleDeg) && angleDeg >= -360 && angleDeg <= 360)
+                    value = value[..colonIdx] + "-" + tail;
+            }
+        }
+
         // Detect semicolon-separated format: TYPE;C1;C2[;angle/focus]
         if (!value.Contains(';')) return value;
 
