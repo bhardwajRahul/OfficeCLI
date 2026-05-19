@@ -2743,15 +2743,21 @@ internal static partial class ChartHelper
 
     private static Drawing.PresetLineDashValues ParseDashStyle(string dash)
     {
+        // CONSISTENCY(ooxml-dash-aliases): accept both the legacy snake_case
+        // form (sysdash_dot) AND the OOXML-native camelCase form
+        // (sysDashDot / lgDashDot / lgDashDotDot / sysDashDotDot) — the
+        // Reader emits the camelCase form to mirror the schema spelling,
+        // so dump→replay would otherwise hit the `_ => Solid` fallback.
         return dash.ToLowerInvariant() switch
         {
             "solid" => Drawing.PresetLineDashValues.Solid,
             "dot" or "sysdot" => Drawing.PresetLineDashValues.SystemDot,
             "dash" or "sysdash" => Drawing.PresetLineDashValues.SystemDash,
-            "dashdot" or "sysdash_dot" => Drawing.PresetLineDashValues.SystemDashDot,
-            "longdash" => Drawing.PresetLineDashValues.LargeDash,
-            "longdashdot" => Drawing.PresetLineDashValues.LargeDashDot,
-            "longdashdotdot" => Drawing.PresetLineDashValues.LargeDashDotDot,
+            "dashdot" or "sysdash_dot" or "sysdashdot" => Drawing.PresetLineDashValues.SystemDashDot,
+            "sysdashdotdot" or "sysdash_dot_dot" => Drawing.PresetLineDashValues.SystemDashDotDot,
+            "longdash" or "lgdash" => Drawing.PresetLineDashValues.LargeDash,
+            "longdashdot" or "lgdashdot" => Drawing.PresetLineDashValues.LargeDashDot,
+            "longdashdotdot" or "lgdashdotdot" => Drawing.PresetLineDashValues.LargeDashDotDot,
             _ => Drawing.PresetLineDashValues.Solid
         };
     }

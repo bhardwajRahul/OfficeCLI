@@ -266,8 +266,11 @@ internal static partial class ChartHelper
         return token.ToLowerInvariant() switch
         {
             "solid" or "dot" or "sysdot" or "dash" or "sysdash"
-                or "dashdot" or "sysdash_dot"
-                or "longdash" or "longdashdot" or "longdashdotdot" => true,
+                or "dashdot" or "sysdash_dot" or "sysdashdot"
+                or "sysdashdotdot" or "sysdash_dot_dot"
+                or "longdash" or "lgdash"
+                or "longdashdot" or "lgdashdot"
+                or "longdashdotdot" or "lgdashdotdot" => true,
             _ => false
         };
     }
