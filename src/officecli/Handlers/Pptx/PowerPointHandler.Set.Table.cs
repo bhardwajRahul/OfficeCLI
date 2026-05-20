@@ -113,7 +113,18 @@ public partial class PowerPointHandler
                             var u = SetTableCellProperties(cell, new Dictionary<string, string> { { key, value } });
                             foreach (var k in u) cellUnsup.Add(k);
                         }
-                        unsupported.AddRange(cellUnsup);
+                        // CONSISTENCY(row-unsupported-msg): the cell setter's
+                        // "(valid cell props: …)" suffix leaks cell vocabulary
+                        // into a row-scope error. Rewrite the hint to the row
+                        // vocabulary (matches the message a user actually sees
+                        // when they type a row-path Set with a typo).
+                        foreach (var raw in cellUnsup)
+                        {
+                            var msg = raw;
+                            var parenIdx = msg.IndexOf(" (valid cell props:", StringComparison.Ordinal);
+                            if (parenIdx >= 0) msg = msg[..parenIdx];
+                            unsupported.Add($"{msg} (valid row props: height, text, c1, c2, …; target /tr[R]/tc[C] for per-position properties)");
+                        }
                     }
                     break;
             }

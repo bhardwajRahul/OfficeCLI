@@ -744,26 +744,50 @@ public partial class PowerPointHandler
         // writes a malformed transition that PowerPoint either ignores or
         // mis-renders. Mirrors the >= 0 guard on border.width / padding.
         var trimmed = (value ?? "").Trim();
-        if (trimmed.StartsWith('-'))
-            throw new ArgumentException($"Invalid advanceTime: '{value}' (must be >= 0).");
-        // ST_PositiveUniversalMeasure is bare milliseconds (integer). Reject
-        // non-numeric garbage like "later" or "5s" up front; PowerPoint
-        // silently drops the attribute on open when it fails to parse, so a
-        // malformed value used to land on disk with no error to the caller.
-        if (!int.TryParse(trimmed, System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out _))
-            throw new ArgumentException($"Invalid advanceTime: '{value}' (expected a non-negative integer in milliseconds).");
+        // CONSISTENCY(advtime-none): help schema documents `advanceTime=none`
+        // as the timer-clear sentinel; treat it before the numeric guard so
+        // it doesn't get rejected as "non-negative integer". No-op when no
+        // transition / advTm is present (matches the spirit of unsetting).
+        var isClear = trimmed.Equals("none", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Length == 0
+            || trimmed.Equals("false", StringComparison.OrdinalIgnoreCase);
+        if (!isClear)
+        {
+            if (trimmed.StartsWith('-'))
+                throw new ArgumentException($"Invalid advanceTime: '{value}' (must be >= 0).");
+            // ST_PositiveUniversalMeasure is bare milliseconds (integer). Reject
+            // non-numeric garbage like "later" or "5s" up front; PowerPoint
+            // silently drops the attribute on open when it fails to parse, so a
+            // malformed value used to land on disk with no error to the caller.
+            if (!int.TryParse(trimmed, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
+                throw new ArgumentException($"Invalid advanceTime: '{value}' (expected a non-negative integer in milliseconds, or 'none' to clear).");
+        }
         var acMorph = slide.ChildElements.FirstOrDefault(c =>
             c.LocalName == "AlternateContent" && c.InnerXml.Contains("morph"));
         if (acMorph != null)
         {
-            // Set advTm directly on transitions inside AlternateContent
             foreach (var trans in acMorph.Descendants().Where(d => d.LocalName == "transition"))
-                trans.SetAttribute(new OpenXmlAttribute("", "advTm", null!, value));
+            {
+                if (isClear)
+                    trans.RemoveAttribute("advTm", "");
+                else
+                    trans.SetAttribute(new OpenXmlAttribute("", "advTm", null!, trimmed));
+            }
         }
         else
         {
-            FindOrCreateTransition(slide).AdvanceAfterTime = value;
+            if (isClear)
+            {
+                // Clear advTm only if a transition already exists — don't
+                // synthesize an empty <p:transition/> just to remove the attr.
+                var existing = slide.GetFirstChild<Transition>();
+                if (existing != null) existing.AdvanceAfterTime = null;
+            }
+            else
+            {
+                FindOrCreateTransition(slide).AdvanceAfterTime = trimmed;
+            }
         }
     }
 

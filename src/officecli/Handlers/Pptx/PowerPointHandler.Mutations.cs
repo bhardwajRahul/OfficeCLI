@@ -252,6 +252,68 @@ public partial class PowerPointHandler
             return null;
         }
 
+        // CONSISTENCY(pptx-deep-text-remove): Query emits and Set accepts
+        // paragraph/run sub-paths on shapes and placeholders; Remove must too.
+        // Mirrors the resolution helpers used by Set.Shape (ResolveShape /
+        // ResolvePlaceholderShape) — no fingerprinting, pure positional path.
+        var runRemoveMatch = Regex.Match(path,
+            @"^/slide\[(\d+)\]/shape\[(\d+)\]/(?:paragraph|p)\[(\d+)\]/(?:run|r)\[(\d+)\]$");
+        if (runRemoveMatch.Success)
+        {
+            var rSlideIdx = int.Parse(runRemoveMatch.Groups[1].Value);
+            var rShapeIdx = int.Parse(runRemoveMatch.Groups[2].Value);
+            var rParaIdx = int.Parse(runRemoveMatch.Groups[3].Value);
+            var rRunIdx = int.Parse(runRemoveMatch.Groups[4].Value);
+            var (rSlidePart, rShape) = ResolveShape(rSlideIdx, rShapeIdx);
+            RemoveParagraphRunOnShape(rSlidePart, rShape, rParaIdx, rRunIdx);
+            return null;
+        }
+
+        var paraRemoveMatch = Regex.Match(path,
+            @"^/slide\[(\d+)\]/shape\[(\d+)\]/(?:paragraph|p)\[(\d+)\]$");
+        if (paraRemoveMatch.Success)
+        {
+            var pSlideIdx = int.Parse(paraRemoveMatch.Groups[1].Value);
+            var pShapeIdx = int.Parse(paraRemoveMatch.Groups[2].Value);
+            var pParaIdx = int.Parse(paraRemoveMatch.Groups[3].Value);
+            var (pSlidePart, pShape) = ResolveShape(pSlideIdx, pShapeIdx);
+            RemoveParagraphOnShape(pSlidePart, pShape, pParaIdx);
+            return null;
+        }
+
+        var phRunRemoveMatch = Regex.Match(path,
+            @"^/slide\[(\d+)\]/placeholder\[(\w+)\]/(?:paragraph|p)\[(\d+)\]/(?:run|r)\[(\d+)\]$");
+        if (phRunRemoveMatch.Success)
+        {
+            var phSlideIdx = int.Parse(phRunRemoveMatch.Groups[1].Value);
+            var phId = phRunRemoveMatch.Groups[2].Value;
+            var phParaIdx = int.Parse(phRunRemoveMatch.Groups[3].Value);
+            var phRunIdx = int.Parse(phRunRemoveMatch.Groups[4].Value);
+            var phSlideParts = GetSlideParts().ToList();
+            if (phSlideIdx < 1 || phSlideIdx > phSlideParts.Count)
+                throw new ArgumentException($"Slide {phSlideIdx} not found (total: {phSlideParts.Count})");
+            var phSlidePart = phSlideParts[phSlideIdx - 1];
+            var phShape = ResolvePlaceholderShape(phSlidePart, phId);
+            RemoveParagraphRunOnShape(phSlidePart, phShape, phParaIdx, phRunIdx);
+            return null;
+        }
+
+        var phParaRemoveMatch = Regex.Match(path,
+            @"^/slide\[(\d+)\]/placeholder\[(\w+)\]/(?:paragraph|p)\[(\d+)\]$");
+        if (phParaRemoveMatch.Success)
+        {
+            var phSlideIdx = int.Parse(phParaRemoveMatch.Groups[1].Value);
+            var phId = phParaRemoveMatch.Groups[2].Value;
+            var phParaIdx = int.Parse(phParaRemoveMatch.Groups[3].Value);
+            var phSlideParts = GetSlideParts().ToList();
+            if (phSlideIdx < 1 || phSlideIdx > phSlideParts.Count)
+                throw new ArgumentException($"Slide {phSlideIdx} not found (total: {phSlideParts.Count})");
+            var phSlidePart = phSlideParts[phSlideIdx - 1];
+            var phShape = ResolvePlaceholderShape(phSlidePart, phId);
+            RemoveParagraphOnShape(phSlidePart, phShape, phParaIdx);
+            return null;
+        }
+
         // CONSISTENCY(pptx-group-flatten): optional /group[K] ancestors between
         // /slide[N] and the leaf element type, so Remove works on paths Query
         // emits (e.g. /slide[1]/group[2]/shape[3]) without requiring callers
@@ -1768,5 +1830,29 @@ public partial class PowerPointHandler
     {
         if (string.IsNullOrEmpty(path)) return false;
         return ProtectedPptxContainerPaths.Contains(path.TrimEnd('/'));
+    }
+
+    private void RemoveParagraphRunOnShape(SlidePart slidePart, Shape shape, int paraIdx, int runIdx)
+    {
+        var paragraphs = shape.TextBody?.Elements<Drawing.Paragraph>().ToList()
+            ?? throw new ArgumentException("Shape has no text body");
+        if (paraIdx < 1 || paraIdx > paragraphs.Count)
+            throw new ArgumentException($"Paragraph {paraIdx} not found (shape has {paragraphs.Count} paragraphs)");
+        var para = paragraphs[paraIdx - 1];
+        var runs = para.Elements<Drawing.Run>().ToList();
+        if (runIdx < 1 || runIdx > runs.Count)
+            throw new ArgumentException($"Run {runIdx} not found (paragraph has {runs.Count} runs)");
+        runs[runIdx - 1].Remove();
+        GetSlide(slidePart).Save();
+    }
+
+    private void RemoveParagraphOnShape(SlidePart slidePart, Shape shape, int paraIdx)
+    {
+        var paragraphs = shape.TextBody?.Elements<Drawing.Paragraph>().ToList()
+            ?? throw new ArgumentException("Shape has no text body");
+        if (paraIdx < 1 || paraIdx > paragraphs.Count)
+            throw new ArgumentException($"Paragraph {paraIdx} not found (shape has {paragraphs.Count} paragraphs)");
+        paragraphs[paraIdx - 1].Remove();
+        GetSlide(slidePart).Save();
     }
 }

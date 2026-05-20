@@ -331,6 +331,27 @@ public partial class PowerPointHandler
                     }
                 }
 
+                // Underline color — mirrors Set ShapeProperties.cs:436. Writes
+                // <a:uFill><a:solidFill><a:srgbClr val="…"/></a:solidFill></a:uFill>
+                // on every run; ReorderDrawingRunProperties keeps the schema
+                // order (uLn before uFill before latin).
+                if (properties.TryGetValue("underline.color", out var ulColorVal)
+                    || properties.TryGetValue("underlineColor", out ulColorVal)
+                    || properties.TryGetValue("underlinecolor", out ulColorVal)
+                    || properties.TryGetValue("font.underline.color", out ulColorVal))
+                {
+                    var ulHex = OfficeCli.Core.ParseHelpers.SanitizeColorForOoxml(ulColorVal).Rgb;
+                    foreach (var run in newShape.Descendants<Drawing.Run>())
+                    {
+                        var rProps = run.RunProperties ?? (run.RunProperties = new Drawing.RunProperties());
+                        rProps.RemoveAllChildren<Drawing.UnderlineFill>();
+                        rProps.RemoveAllChildren<Drawing.UnderlineFillText>();
+                        rProps.AppendChild(new Drawing.UnderlineFill(
+                            new Drawing.SolidFill(new Drawing.RgbColorModelHex { Val = ulHex })));
+                        ReorderDrawingRunProperties(rProps);
+                    }
+                }
+
                 // Strikethrough
                 if (properties.TryGetValue("strikethrough", out var stVal)
                     || properties.TryGetValue("strike", out stVal)

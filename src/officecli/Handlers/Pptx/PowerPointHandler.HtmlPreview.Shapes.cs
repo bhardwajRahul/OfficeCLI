@@ -783,9 +783,10 @@ public partial class PowerPointHandler
         var shadowCss = EffectListToShadowCss(effectList, themeColors);
         var glowCss = EffectListToGlowCss(effectList, themeColors);
 
-        // brightness / contrast — Set.Media writes lumOff (brightness) and
-        // lumMod (contrast) under a:blip; the SDK stores them as
-        // OpenXmlUnknownElement on re-parse, so walk children by LocalName.
+        // brightness / contrast — Set.Media writes <a:lum bright="N"
+        // contrast="M"/> under a:blip. Tolerate legacy <a:lumMod>/<a:lumOff>
+        // children written by older builds (invalid per CT_Blip but found
+        // in the wild) so existing decks still preview correctly.
         var picBlipForFx = pic.BlipFill?.GetFirstChild<Drawing.Blip>();
         double? brightnessPct = null, contrastPct = null;
         if (picBlipForFx != null)
@@ -793,10 +794,18 @@ public partial class PowerPointHandler
             foreach (var kid in picBlipForFx.ChildElements)
             {
                 if (kid.NamespaceUri != "http://schemas.openxmlformats.org/drawingml/2006/main") continue;
-                var attr = kid.GetAttribute("val", "").Value;
-                if (string.IsNullOrEmpty(attr) || !int.TryParse(attr, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var iv)) continue;
-                if (kid.LocalName == "lumOff") brightnessPct = iv / 1000.0;
-                else if (kid.LocalName == "lumMod") contrastPct = (iv - 100000) / 1000.0;
+                if (kid is Drawing.LuminanceEffect lumElem)
+                {
+                    if (lumElem.Brightness?.HasValue == true) brightnessPct = lumElem.Brightness.Value / 1000.0;
+                    if (lumElem.Contrast?.HasValue == true) contrastPct = lumElem.Contrast.Value / 1000.0;
+                }
+                else if (kid.LocalName == "lumOff" || kid.LocalName == "lumMod")
+                {
+                    var attr = kid.GetAttribute("val", "").Value;
+                    if (string.IsNullOrEmpty(attr) || !int.TryParse(attr, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var iv)) continue;
+                    if (kid.LocalName == "lumOff") brightnessPct ??= iv / 1000.0;
+                    else if (kid.LocalName == "lumMod") contrastPct ??= (iv - 100000) / 1000.0;
+                }
             }
         }
 

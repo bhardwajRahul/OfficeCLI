@@ -622,6 +622,14 @@ public partial class PowerPointHandler
         for (int i = 1; i < parts.Length; i++)
         {
             var seg = parts[i].ToLowerInvariant();
+            // CONSISTENCY(animation-double-dash): a literal `--` in the input
+            // (e.g. `fade-entrance--1000` for a negative duration) emits an
+            // empty segment between the dashes. Skip it — the adjacent token
+            // after it carries the numeric value, which the int.TryParse arm
+            // below handles (clamping to >= 0 via Math.Max). Without this,
+            // the empty string fell to `unrecognized.Add(seg)` and fired a
+            // spurious warning even though the animation applied correctly.
+            if (string.IsNullOrEmpty(seg)) continue;
             // Class?
             if (seg is "entrance" or "in" or "entr")
                 RecordClass(seg, TimeNodePresetClassValues.Entrance);

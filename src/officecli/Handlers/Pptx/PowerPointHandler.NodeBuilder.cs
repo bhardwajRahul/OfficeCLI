@@ -642,7 +642,10 @@ public partial class PowerPointHandler
         if (!string.IsNullOrEmpty(shapeAlt)) node.Format["alt"] = shapeAlt;
         var shapeId = GetCNvPrId(shape);
         if (shapeId.HasValue) node.Format["id"] = shapeId.Value;
-        if (isTitle) node.Format["isTitle"] = true;
+        // CONSISTENCY(istitle-bool): always emit isTitle so query selectors
+        // `[isTitle=true]` and `[isTitle=false]` are both honored by the
+        // AttributeFilter post-query pass (which checks node.Format directly).
+        node.Format["isTitle"] = isTitle;
 
         // Position and size
         var xfrm = shape.ShapeProperties?.Transform2D;
@@ -845,6 +848,16 @@ public partial class PowerPointHandler
                     _ => ulInner
                 };
             }
+            // CONSISTENCY(underline-color): mirror the run-level reader so
+            // shape-level Get also surfaces the underline color set on the
+            // first run. Without this, `Add shape underline.color=...` round-
+            // trips at the run scope only and Get on the shape drops it.
+            var firstRunUFill = firstRun.RunProperties.GetFirstChild<Drawing.UnderlineFill>();
+            if (firstRunUFill != null)
+            {
+                var firstRunUColor = ReadColorFromFill(firstRunUFill.GetFirstChild<Drawing.SolidFill>());
+                if (firstRunUColor != null) node.Format["underline.color"] = firstRunUColor;
+            }
             if (firstRun.RunProperties.Strike?.HasValue == true)
             {
                 // Emit explicit "none" too, so a round-trip Add(strike=none) → Get
@@ -991,8 +1004,16 @@ public partial class PowerPointHandler
 
         // Effects (shadow, glow, reflection) — check shape-level first, then text run-level
         var effectList = shape.ShapeProperties?.GetFirstChild<Drawing.EffectList>();
-        // Fall back to first text run's effectLst (used for fill=none shapes)
-        var textEffectList = effectList == null || (!effectList.HasChildren)
+        // Fall back to first text run's effectLst ONLY when the shape itself has
+        // no fill — for filled shapes, run-level effects belong to the run, not
+        // the shape. CONSISTENCY(run-context-explicit): Set on run path writes
+        // to the run; Get on shape must not silently mirror the run's effects
+        // up to the shape when the shape was never the target.
+        var hasShapeFill = shape.ShapeProperties?.GetFirstChild<Drawing.SolidFill>() != null
+            || shape.ShapeProperties?.GetFirstChild<Drawing.GradientFill>() != null
+            || shape.ShapeProperties?.GetFirstChild<Drawing.BlipFill>() != null
+            || shape.ShapeProperties?.GetFirstChild<Drawing.PatternFill>() != null;
+        var textEffectList = (effectList == null || !effectList.HasChildren) && !hasShapeFill
             ? shape.TextBody?.Descendants<Drawing.RunProperties>()
                 .Select(rp => rp.GetFirstChild<Drawing.EffectList>())
                 .FirstOrDefault(el => el != null)
@@ -1028,11 +1049,22 @@ public partial class PowerPointHandler
             var reflEl = activeEffectList.GetFirstChild<Drawing.Reflection>();
             if (reflEl != null)
             {
-                // Map endPosition back to type: tight=55000, half=90000, full=100000
+                // CONSISTENCY(reflection-exact-match): Set accepts both named
+                // presets (tight/half/full → 55000/90000/100000) and bare
+                // percent (0-100 → pct*1000). The previous bucketed readback
+                // (`>=95000 full, >=70000 half, else tight`) made every
+                // non-preset numeric round-trip as the nearest preset name,
+                // silently rewriting the user's input. Now: exact-preset
+                // values emit the preset name, everything else emits the
+                // integer percent the Set side accepts.
                 var endPos = reflEl.EndPosition?.Value ?? 0;
-                if (endPos >= 95000) node.Format["reflection"] = "full";
-                else if (endPos >= 70000) node.Format["reflection"] = "half";
-                else node.Format["reflection"] = "tight";
+                node.Format["reflection"] = endPos switch
+                {
+                    55000 => "tight",
+                    90000 => "half",
+                    100000 => "full",
+                    _ => (endPos / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                };
             }
             var softEdge = activeEffectList.GetFirstChild<Drawing.SoftEdge>();
             if (softEdge?.Radius?.HasValue == true)
@@ -1136,6 +1168,21 @@ public partial class PowerPointHandler
                     "ctr" => "center",
                     "b" => "bottom",
                     _ => vaInner
+                };
+            }
+
+            // Text direction (a:bodyPr @vert). Mirrors the cell-level reader at
+            // line 344. Set accepts vertical90 / vertical270 / stacked etc; Get
+            // must surface them so round-trip works.
+            if (bodyPr.Vertical?.HasValue == true)
+            {
+                node.Format["textdirection"] = bodyPr.Vertical.InnerText switch
+                {
+                    "horz" => "horizontal",
+                    "vert" => "vertical90",
+                    "vert270" => "vertical270",
+                    "wordArtVert" => "stacked",
+                    _ => bodyPr.Vertical.InnerText
                 };
             }
 
@@ -1318,6 +1365,18 @@ public partial class PowerPointHandler
             if (fs.HasValue) node.Format["size"] = $"{fs.Value / 100.0:0.##}pt";
             if (run.RunProperties.Bold?.Value == true) node.Format["bold"] = true;
             if (run.RunProperties.Italic?.Value == true) node.Format["italic"] = true;
+            // CONSISTENCY(run-rtl): rPr carries an rtl attribute too; Set on a
+            // run path writes here. Drawing.RunProperties doesn't expose it as a
+            // typed property — read the raw attribute so Get on /paragraph/run
+            // round-trips run-context rtl=true.
+            foreach (var rAttr in run.RunProperties.GetAttributes())
+            {
+                if (rAttr.LocalName == "rtl" && !string.IsNullOrEmpty(rAttr.Value))
+                {
+                    node.Format["rtl"] = rAttr.Value is "1" or "true" ? "true" : "false";
+                    break;
+                }
+            }
             if (run.RunProperties.Underline?.HasValue == true && run.RunProperties.Underline.Value != Drawing.TextUnderlineValues.None)
             {
                 node.Format["underline"] = run.RunProperties.Underline.InnerText switch
@@ -1364,6 +1423,53 @@ public partial class PowerPointHandler
                 if (!string.IsNullOrEmpty(runTip)) node.Format["tooltip"] = runTip!;
             }
 
+            // Effects on the run's own <a:rPr><a:effectLst>. Set on run path
+            // writes here (ApplyTextShadow / ApplyTextGlow / ApplyTextReflection
+            // / ApplyTextSoftEdge); Get must read it back at run level for
+            // round-trip. Format strings mirror the shape-level effect readers.
+            var runEffectList = run.RunProperties.GetFirstChild<Drawing.EffectList>();
+            if (runEffectList != null)
+            {
+                var rOuterShadow = runEffectList.GetFirstChild<Drawing.OuterShadow>();
+                if (rOuterShadow != null)
+                {
+                    var sColor = EnsureEightDigitHexForEffect(ReadColorFromElement(rOuterShadow) ?? "000000");
+                    var blurPt = rOuterShadow.BlurRadius?.HasValue == true ? $"{rOuterShadow.BlurRadius.Value / 12700.0:0.##}" : "4";
+                    var angleDeg = rOuterShadow.Direction?.HasValue == true ? $"{rOuterShadow.Direction.Value / 60000.0:0.##}" : "45";
+                    var distPt = rOuterShadow.Distance?.HasValue == true ? $"{rOuterShadow.Distance.Value / 12700.0:0.##}" : "3";
+                    var alphaEl = rOuterShadow.Descendants<Drawing.Alpha>().FirstOrDefault();
+                    var opacity = alphaEl?.Val?.HasValue == true ? $"{alphaEl.Val.Value / 1000.0:0.##}" : "100";
+                    node.Format["shadow"] = $"{sColor}-{blurPt}-{angleDeg}-{distPt}-{opacity}";
+                }
+                var rGlow = runEffectList.GetFirstChild<Drawing.Glow>();
+                if (rGlow != null)
+                {
+                    var gColor = EnsureEightDigitHexForEffect(ReadColorFromElement(rGlow) ?? "000000");
+                    var radiusPt = rGlow.Radius?.HasValue == true ? $"{rGlow.Radius.Value / 12700.0:0.##}" : "8";
+                    var gAlphaEl = rGlow.Descendants<Drawing.Alpha>().FirstOrDefault();
+                    var gOpacity = gAlphaEl?.Val?.HasValue == true ? $"{gAlphaEl.Val.Value / 1000.0:0.##}" : "100";
+                    node.Format["glow"] = $"{gColor}-{radiusPt}-{gOpacity}";
+                }
+                var rRefl = runEffectList.GetFirstChild<Drawing.Reflection>();
+                if (rRefl != null)
+                {
+                    // CONSISTENCY(reflection-exact-match): mirror the shape-level
+                    // reader at line 1040 — exact-preset matches emit the name,
+                    // anything else emits the integer percent so Set round-trips.
+                    var endPos = rRefl.EndPosition?.Value ?? 0;
+                    node.Format["reflection"] = endPos switch
+                    {
+                        55000 => "tight",
+                        90000 => "half",
+                        100000 => "full",
+                        _ => (endPos / 1000).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    };
+                }
+                var rSoftEdge = runEffectList.GetFirstChild<Drawing.SoftEdge>();
+                if (rSoftEdge?.Radius?.HasValue == true)
+                    node.Format["softEdge"] = $"{rSoftEdge.Radius.Value / 12700.0:0.##}pt";
+            }
+
             // Long-tail OOXML fallback. drawingML rPr carries most properties
             // as attributes on rPr itself (kern, spc, lang, dirty, smtClean,
             // normalizeH, baseline, ...), with sub-elements for fills/fonts/
@@ -1384,13 +1490,23 @@ public partial class PowerPointHandler
     private static readonly System.Collections.Generic.HashSet<string> CuratedRunAttrs =
         new(System.StringComparer.Ordinal)
     {
-        "b", "i", "u", "strike", "sz", "spc", "baseline",
+        "b", "i", "u", "strike", "sz", "spc", "baseline", "rtl",
+    };
+
+    // CONSISTENCY(rpr-bool-set): mirrors DrawingRunBoolAttrs in
+    // ShapeProperties.cs — these rPr attributes are OOXML xsd:boolean and
+    // must read back as canonical "true"/"false" (not "1"/"0") so user
+    // Add/Set vocabulary round-trips through Get.
+    private static readonly System.Collections.Generic.HashSet<string> RunBoolAttrNames =
+        new(System.StringComparer.Ordinal)
+    {
+        "b", "i", "noProof", "normalizeH", "dirty", "err", "smtClean", "kumimoji",
     };
 
     private static readonly System.Collections.Generic.HashSet<string> CuratedRunChildren =
         new(System.StringComparer.Ordinal)
     {
-        "latin", "ea", "cs", "solidFill", "gradFill", "hlinkClick",
+        "latin", "ea", "cs", "solidFill", "gradFill", "hlinkClick", "effectLst",
     };
 
     private static void FillUnknownRunProps(Drawing.RunProperties? rPr, DocumentNode node)
@@ -1404,7 +1520,20 @@ public partial class PowerPointHandler
             if (string.IsNullOrEmpty(name)) continue;
             if (CuratedRunAttrs.Contains(name)) continue;
             if (node.Format.ContainsKey(name)) continue;
-            node.Format[name] = attr.Value;
+            // CONSISTENCY(rpr-bool-readback): normalize OOXML xsd:boolean
+            // attrs ("1"/"0", "true"/"false") to canonical "true"/"false"
+            // so Add/Set values round-trip without forcing callers to
+            // memorize the wire form. Mirrors the bool set declared in
+            // DrawingRunBoolAttrs (ShapeProperties.cs).
+            if (RunBoolAttrNames.Contains(name))
+            {
+                var v = attr.Value;
+                node.Format[name] = v is "1" or "true" or "True" ? "true" : "false";
+            }
+            else
+            {
+                node.Format[name] = attr.Value;
+            }
         }
 
         // Walk leaf children that match the OOXML "child-with-val" or "toggle"
@@ -1453,11 +1582,11 @@ public partial class PowerPointHandler
         node.Format["name"] = name;
         var picId = GetCNvPrId(pic);
         if (picId.HasValue) node.Format["id"] = picId.Value;
-        if (!isVideo && !isAudio)
-        {
-            if (!string.IsNullOrEmpty(alt)) node.Format["alt"] = alt;
-            else node.Format["alt"] = "(missing)";
-        }
+        // CONSISTENCY(media-alt-readback): emit alt for video/audio too — Set
+        // accepts it and ViewAsIssues flags missing alt on audio/video <p:pic>
+        // descendants, so Get must surface it to close the round-trip.
+        if (!string.IsNullOrEmpty(alt)) node.Format["alt"] = alt;
+        else node.Format["alt"] = "(missing)";
 
         // Read media timing (volume, autoplay) from slide Timing tree
         if ((isVideo || isAudio) && slidePart != null)
@@ -1521,30 +1650,36 @@ public partial class PowerPointHandler
             if (!string.IsNullOrEmpty(picTip)) node.Format["tooltip"] = picTip!;
         }
 
-        // Brightness / contrast — stored on the same blip as
-        // a:lumOff (brightness) and a:lumMod (contrast). Mirrors the
-        // write side in Set.Media.cs (`case "brightness" or "contrast"`).
-        // Note: the SDK's Blip class doesn't strong-type lumMod/lumOff as
-        // direct children (they're effect children per the a:CT_Blip
-        // schema but live in a content-group the SDK marks "unknown" once
-        // round-tripped). Read via LocalName/attribute so we tolerate both
-        // the strongly-typed append we do in Set.Media and the unknown
-        // element form we see on re-parse.
+        // Brightness / contrast — stored on the blip as <a:lum bright="N"
+        // contrast="M"/> (CT_LuminanceEffect; each value is percent × 1000).
+        // Mirrors the write side in Set.Media.cs. Legacy files written by
+        // older builds may carry an invalid <a:lumMod>/<a:lumOff> pair under
+        // the blip; we still read them so existing decks display correctly
+        // until they're re-Set (which migrates them to <a:lum>).
         if (picBlip != null)
         {
-            int? lumModVal = null, lumOffVal = null;
+            int? brightVal = null, contrastVal = null;
             foreach (var kid in picBlip.ChildElements)
             {
                 if (kid.NamespaceUri != "http://schemas.openxmlformats.org/drawingml/2006/main") continue;
-                var valAttr = kid.GetAttribute("val", "").Value;
-                if (string.IsNullOrEmpty(valAttr) || !int.TryParse(valAttr, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var iv)) continue;
-                if (kid.LocalName == "lumMod") lumModVal = iv;
-                else if (kid.LocalName == "lumOff") lumOffVal = iv;
+                if (kid is Drawing.LuminanceEffect lumElem)
+                {
+                    if (lumElem.Brightness?.HasValue == true) brightVal = lumElem.Brightness.Value;
+                    if (lumElem.Contrast?.HasValue == true) contrastVal = lumElem.Contrast.Value;
+                }
+                else if (kid.LocalName == "lumOff" || kid.LocalName == "lumMod")
+                {
+                    // Legacy invalid markup written by older builds.
+                    var valAttr = kid.GetAttribute("val", "").Value;
+                    if (string.IsNullOrEmpty(valAttr) || !int.TryParse(valAttr, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var iv)) continue;
+                    if (kid.LocalName == "lumOff") brightVal ??= iv;
+                    else if (kid.LocalName == "lumMod") contrastVal ??= iv - 100000;
+                }
             }
-            if (lumOffVal.HasValue && lumOffVal.Value != 0)
-                node.Format["brightness"] = $"{lumOffVal.Value / 1000.0:0.##}";
-            if (lumModVal.HasValue && lumModVal.Value != 100000)
-                node.Format["contrast"] = $"{(lumModVal.Value - 100000) / 1000.0:0.##}";
+            if (brightVal.HasValue && brightVal.Value != 0)
+                node.Format["brightness"] = $"{brightVal.Value / 1000.0:0.##}";
+            if (contrastVal.HasValue && contrastVal.Value != 0)
+                node.Format["contrast"] = $"{contrastVal.Value / 1000.0:0.##}";
         }
 
         // Shadow / glow — Set.Media writes these into spPr/effectLst via

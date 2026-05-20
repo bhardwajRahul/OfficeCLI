@@ -281,10 +281,52 @@ public partial class PowerPointHandler
         var slidePart = slideParts2[slideIdx - 1];
         var shape = ResolvePlaceholderShape(slidePart, phId);
 
+        // CONSISTENCY(placeholder-materialize-run): ResolvePlaceholderShape clones
+        // a layout placeholder onto the slide with an empty paragraph (no run)
+        // when materializing for the first time. Run-level properties (font /
+        // size / bold / color / ...) iterate over `runs`, so an empty placeholder
+        // would silently drop them. Seed a single empty run on the first
+        // paragraph so the run-level Set has a target to write to — mirrors how
+        // `set text=...` materializes runs by rebuilding the paragraph tree.
         var allRuns = shape.Descendants<Drawing.Run>().ToList();
+        if (allRuns.Count == 0 && shape.TextBody != null && HasRunLevelProperty(properties))
+        {
+            var firstPara = shape.TextBody.Elements<Drawing.Paragraph>().FirstOrDefault();
+            if (firstPara == null)
+            {
+                firstPara = new Drawing.Paragraph();
+                shape.TextBody.Append(firstPara);
+            }
+            var seededRun = new Drawing.Run(
+                new Drawing.RunProperties { Language = "en-US" },
+                new Drawing.Text { Text = "" });
+            var endParaRPr = firstPara.GetFirstChild<Drawing.EndParagraphRunProperties>();
+            if (endParaRPr != null)
+                firstPara.InsertBefore(seededRun, endParaRPr);
+            else
+                firstPara.Append(seededRun);
+            allRuns = new List<Drawing.Run> { seededRun };
+        }
         var unsupported = SetRunOrShapeProperties(properties, allRuns, shape, slidePart);
         GetSlide(slidePart).Save();
         return unsupported;
+    }
+
+    private static bool HasRunLevelProperty(Dictionary<string, string> properties)
+    {
+        foreach (var key in properties.Keys)
+        {
+            var k = key.ToLowerInvariant();
+            if (k is "font" or "font.name" or "font.latin" or "font.ea" or "font.eastasia"
+                or "font.eastasian" or "font.cs" or "font.complexscript" or "font.complex"
+                or "size" or "fontsize" or "font.size"
+                or "bold" or "font.bold" or "italic" or "font.italic"
+                or "underline" or "strike" or "color" or "highlight"
+                or "spacing" or "baseline" or "kern" or "cap" or "allcaps" or "smallcaps"
+                or "lang" or "lang.latin")
+                return true;
+        }
+        return false;
     }
 
     private List<string> SetGroupByPath(Match grpMatch, Dictionary<string, string> properties)
@@ -695,6 +737,45 @@ public partial class PowerPointHandler
         var innerShapes = grp.Elements<Shape>().ToList();
         if (shapeIdx < 1 || shapeIdx > innerShapes.Count)
             throw new ArgumentException($"Shape {shapeIdx} not found in group {grpIdx} (total: {innerShapes.Count})");
+        return ApplyShapePropsCore(slidePart, innerShapes[shapeIdx - 1], properties);
+    }
+
+    /// <summary>
+    /// CONSISTENCY(group-inner-shape): arbitrary-depth Set on
+    /// /slide[N]/group[M](/group[L])+/shape[K]. Mirrors Query.cs:836
+    /// nestedGroupMatch's walk — descend each /group[L] segment in
+    /// order, then resolve shape[K] inside the final group.
+    /// </summary>
+    private List<string> SetNestedGroupInnerShapeByPath(Match match, Dictionary<string, string> properties)
+    {
+        var slideIdx = int.Parse(match.Groups[1].Value);
+        var rootGrpIdx = int.Parse(match.Groups[2].Value);
+        var nestedSegs = match.Groups[3].Value;
+        var shapeIdx = int.Parse(match.Groups[4].Value);
+
+        var slideParts = GetSlideParts().ToList();
+        if (slideIdx < 1 || slideIdx > slideParts.Count)
+            throw new ArgumentException($"Slide {slideIdx} not found (total: {slideParts.Count})");
+        var slidePart = slideParts[slideIdx - 1];
+        var shapeTree = GetSlide(slidePart).CommonSlideData?.ShapeTree
+            ?? throw new ArgumentException("Slide has no shape tree");
+        var rootGroups = shapeTree.Elements<GroupShape>().ToList();
+        if (rootGrpIdx < 1 || rootGrpIdx > rootGroups.Count)
+            throw new ArgumentException($"Group {rootGrpIdx} not found (total: {rootGroups.Count})");
+        var current = rootGroups[rootGrpIdx - 1];
+        var depth = 1;
+        foreach (Match seg in Regex.Matches(nestedSegs, @"/group\[(\d+)\]"))
+        {
+            depth++;
+            var subIdx = int.Parse(seg.Groups[1].Value);
+            var subs = current.Elements<GroupShape>().ToList();
+            if (subIdx < 1 || subIdx > subs.Count)
+                throw new ArgumentException($"Nested group {subIdx} not found at depth {depth} (total: {subs.Count})");
+            current = subs[subIdx - 1];
+        }
+        var innerShapes = current.Elements<Shape>().ToList();
+        if (shapeIdx < 1 || shapeIdx > innerShapes.Count)
+            throw new ArgumentException($"Shape {shapeIdx} not found in nested group (total: {innerShapes.Count})");
         return ApplyShapePropsCore(slidePart, innerShapes[shapeIdx - 1], properties);
     }
 

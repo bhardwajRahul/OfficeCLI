@@ -339,6 +339,18 @@ public partial class PowerPointHandler
         var grpParaMatch = Regex.Match(path, @"^/slide\[(\d+)\]/group\[(\d+)\]/shape\[(\d+)\]/(?:paragraph|p)\[(\d+)\]$");
         if (grpParaMatch.Success) return SetGroupParagraphByPath(grpParaMatch, properties);
 
+        // Try arbitrary-depth group descent for shape leaves:
+        //   /slide[N]/group[M](/group[L])+/shape[K]
+        // CONSISTENCY(group-inner-shape): Query.cs already walks arbitrary-depth
+        // group chains (see Query.cs:836 nestedGroupMatch). Set must too —
+        // without this branch, /slide[1]/group[1]/group[1]/shape[1] falls
+        // through to the XML-fallback and errors with "Element not found".
+        // Match nested-only (≥2 group segments); the depth-1 case below stays.
+        var nestedGrpInnerShapeMatch = Regex.Match(path,
+            @"^/slide\[(\d+)\]/group\[(\d+)\]((?:/group\[\d+\])+)/shape\[(\d+)\]$");
+        if (nestedGrpInnerShapeMatch.Success)
+            return SetNestedGroupInnerShapeByPath(nestedGrpInnerShapeMatch, properties);
+
         // Try group inner shape path: /slide[N]/group[M]/shape[K]
         // CONSISTENCY(group-inner-shape): Get supports this; Set must too.
         var grpInnerShapeMatch = Regex.Match(path, @"^/slide\[(\d+)\]/group\[(\d+)\]/shape\[(\d+)\]$");

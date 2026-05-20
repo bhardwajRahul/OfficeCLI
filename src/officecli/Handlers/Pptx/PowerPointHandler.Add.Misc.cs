@@ -399,32 +399,51 @@ public partial class PowerPointHandler
                     var trimmed = sp.Trim();
                     if (trimmed.StartsWith("/"))
                     {
-                        // @id path: /slide[N]/shape[@id=M] — round-trips from `query shape`
-                        var atIdMatch = Regex.Match(trimmed, @"/slide\[\d+\]/shape\[@id=(\d+)\]");
+                        // CONSISTENCY(group-frame-paths): accept any frame-like
+                        // element kind in the path (shape / group / picture / pic /
+                        // connector / connection / chart / table / graphicframe),
+                        // mirroring the heterogeneous frame list AddGroup operates
+                        // on. Without this, `query group` / `query picture` paths
+                        // round-tripped into `shapes=` were rejected even though
+                        // the lookup index space supports them. The first element
+                        // type is intentionally not validated against frame kind
+                        // — id/name/positional lookup is by-position within
+                        // grpFrameList regardless of which kind name the user used.
+                        const string frameKind =
+                            @"(?:shape|group|picture|pic|connector|connection|chart|table|graphicframe|graphicFrame|ole|object|embed|video|audio)";
+
+                        // @id path: /slide[N]/<kind>[@id=M] — round-trips from `query`
+                        var atIdMatch = Regex.Match(trimmed,
+                            $@"/slide\[\d+\]/{frameKind}\[@id=(\d+)\]",
+                            RegexOptions.IgnoreCase);
                         if (atIdMatch.Success)
                         {
                             var atId = uint.Parse(atIdMatch.Groups[1].Value);
                             var idx = grpFrameList.FindIndex(e => FrameId(e) == atId);
                             if (idx < 0)
-                                throw new ArgumentException($"Shape @id={atId} not found on this slide");
+                                throw new ArgumentException($"Frame @id={atId} not found on this slide");
                             shapeIndices.Add(idx + 1);
                             continue;
                         }
-                        // @name path: /slide[N]/shape[@name=Foo]
-                        var atNameMatch = Regex.Match(trimmed, @"/slide\[\d+\]/shape\[@name=([^\]]+)\]");
+                        // @name path: /slide[N]/<kind>[@name=Foo]
+                        var atNameMatch = Regex.Match(trimmed,
+                            $@"/slide\[\d+\]/{frameKind}\[@name=([^\]]+)\]",
+                            RegexOptions.IgnoreCase);
                         if (atNameMatch.Success)
                         {
                             var atName = atNameMatch.Groups[1].Value;
                             var idx = grpFrameList.FindIndex(e => FrameName(e) == atName);
                             if (idx < 0)
-                                throw new ArgumentException($"Shape @name={atName} not found on this slide");
+                                throw new ArgumentException($"Frame @name={atName} not found on this slide");
                             shapeIndices.Add(idx + 1);
                             continue;
                         }
-                        // Positional path: /slide[N]/shape[M]
-                        var pathMatch = Regex.Match(trimmed, @"/slide\[\d+\]/shape\[(\d+)\]");
+                        // Positional path: /slide[N]/<kind>[M]
+                        var pathMatch = Regex.Match(trimmed,
+                            $@"/slide\[\d+\]/{frameKind}\[(\d+)\]",
+                            RegexOptions.IgnoreCase);
                         if (!pathMatch.Success)
-                            throw new ArgumentException($"Invalid shape path: '{trimmed}'. Expected /slide[N]/shape[M], /slide[N]/shape[@id=ID], or /slide[N]/shape[@name=Foo]");
+                            throw new ArgumentException($"Invalid frame path: '{trimmed}'. Expected /slide[N]/<kind>[M], /slide[N]/<kind>[@id=ID], or /slide[N]/<kind>[@name=Foo] where <kind> is shape/group/picture/connector/chart/table/etc.");
                         shapeIndices.Add(int.Parse(pathMatch.Groups[1].Value));
                     }
                     else if (int.TryParse(trimmed, out var idx))
@@ -441,9 +460,19 @@ public partial class PowerPointHandler
                 // existing groups, pictures, charts, and connectors can also be
                 // grouped together. Index space matches the shape-tree order
                 // PowerPoint uses for sibling lookups (B13).
+                //
+                // CONSISTENCY(group-numeric-skip-placeholder): exclude placeholder
+                // <p:sp> elements (those with a <p:ph> child) from the numeric
+                // index so `shapes=1,2` aligns with the non-placeholder shape[N]
+                // index space that Query/Get use. Users wanting to group a
+                // placeholder can still target it explicitly via the @id= /
+                // @name= / path forms above.
                 var allShapes = grpShapeTree.ChildElements
                     .Where(c => c is Shape || c is GroupShape || c is Picture
                         || c is GraphicFrame || c is ConnectionShape)
+                    .Where(c => !(c is Shape s
+                        && s.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties
+                            ?.GetFirstChild<PlaceholderShape>() != null))
                     .ToList();
 
                 // Collect shapes to group (in reverse order to maintain indices during removal)

@@ -457,6 +457,37 @@ public partial class PowerPointHandler
                         "false" or "none" => Drawing.TextStrikeValues.NoStrike,
                         _ => throw new ArgumentException($"Invalid strikethrough value: '{rStrike}'. Valid values: single, double, none.")
                     };
+                // cap on run rPr (a:rPr/@cap). Schema declares add:true; symmetric
+                // with the run-context Set branch in ShapeProperties.cs. Aliases
+                // allCaps / smallCaps mirror Set's normalization — boolean-truthy
+                // → all/small respectively; explicit "none"/"false" clears.
+                string? rCapKey =
+                    properties.ContainsKey("cap") ? "cap" :
+                    properties.Keys.FirstOrDefault(k =>
+                        k.Equals("allCaps", StringComparison.OrdinalIgnoreCase)
+                        || k.Equals("allcaps", StringComparison.OrdinalIgnoreCase)
+                        || k.Equals("smallCaps", StringComparison.OrdinalIgnoreCase)
+                        || k.Equals("smallcaps", StringComparison.OrdinalIgnoreCase));
+                if (rCapKey != null)
+                {
+                    var rCapRaw = properties[rCapKey];
+                    string capNorm;
+                    if (rCapKey.Equals("cap", StringComparison.Ordinal))
+                        capNorm = rCapRaw.ToLowerInvariant();
+                    else if (rCapKey.StartsWith("allCaps", StringComparison.OrdinalIgnoreCase)
+                          || rCapKey.StartsWith("allcaps", StringComparison.OrdinalIgnoreCase))
+                        capNorm = (rCapRaw is "0" or "false" or "False" or "none") ? "none" : "all";
+                    else
+                        capNorm = (rCapRaw is "0" or "false" or "False" or "none") ? "none" : "small";
+
+                    rProps.Capital = capNorm switch
+                    {
+                        "all" => Drawing.TextCapsValues.All,
+                        "small" => Drawing.TextCapsValues.Small,
+                        "none" => Drawing.TextCapsValues.None,
+                        _ => throw new ArgumentException($"Invalid cap value: '{rCapRaw}'. Valid values: none, small, all.")
+                    };
+                }
                 // Schema order: solidFill before latin/ea
                 if (properties.TryGetValue("color", out var rColor))
                     rProps.AppendChild(BuildSolidFill(rColor));
@@ -514,6 +545,31 @@ public partial class PowerPointHandler
                     rProps.Baseline = IsTruthy(rSuper) ? 30000 : 0;
                 else if (properties.TryGetValue("subscript", out var rSub))
                     rProps.Baseline = IsTruthy(rSub) ? -25000 : 0;
+
+                // CONSISTENCY(addrun-rpr-attrs): AddShape routes these through
+                // SetRunOrShapeProperties / effectKeys but AddRun has its own
+                // narrower property loop. Mirror the bool/int attribute set
+                // here so `--type run` round-trips the same OOXML rPr surface
+                // (matches DrawingRunBoolAttrs / DrawingRunIntAttrs in
+                // PowerPointHandler.ShapeProperties.cs).
+                foreach (var (boolKey, attrName) in new[] {
+                    ("noProof", "noProof"), ("dirty", "dirty"),
+                    ("err", "err"), ("smtClean", "smtClean") })
+                {
+                    if (properties.TryGetValue(boolKey, out var bv))
+                        rProps.SetAttribute(new DocumentFormat.OpenXml.OpenXmlAttribute(
+                            "", attrName, "", IsTruthy(bv) ? "1" : "0"));
+                }
+                if (properties.TryGetValue("smtId", out var smtIdRaw))
+                {
+                    // ST_UnsignedInt-ish — accept any integer string; let
+                    // ParseHelpers normalize (matches the Set int-attr path).
+                    var smtIdVal = OfficeCli.Core.ParseHelpers.SafeParseInt(smtIdRaw, "smtId");
+                    if (smtIdVal < 0)
+                        throw new ArgumentException($"Invalid smtId '{smtIdRaw}' (must be non-negative).");
+                    rProps.SetAttribute(new DocumentFormat.OpenXml.OpenXmlAttribute(
+                        "", "smtId", "", smtIdVal.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                }
 
                 newRun.RunProperties = rProps;
                 // Hyperlink on the new run. Schema declares link.add=true with

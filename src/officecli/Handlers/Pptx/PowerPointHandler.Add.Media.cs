@@ -390,6 +390,29 @@ public partial class PowerPointHandler
                 string chartType = "column";
                 if (properties.TryGetValue("charttype", out var ct) || properties.TryGetValue("type", out ct))
                     chartType = ct;
+                // CONSISTENCY(chart-grouping-alias): `grouping=stacked` /
+                // `grouping=percentStacked` is the common user vocabulary
+                // (mirrors the OOXML grouping attribute name). Fold it onto the
+                // `<base>_<suffix>` chartType convention that ParseChartType
+                // already understands, instead of carrying a separate Setter
+                // case that would have to mutate <c:barGrouping> post-build.
+                // Only applied when the type doesn't already encode a suffix.
+                if (properties.TryGetValue("grouping", out var groupingVal)
+                    && !chartType.Contains('_', StringComparison.Ordinal))
+                {
+                    var g = groupingVal.Trim().ToLowerInvariant();
+                    var suffix = g switch
+                    {
+                        "stacked" => "_stacked",
+                        "percentstacked" or "percent_stacked" => "_percentStacked",
+                        "clustered" or "standard" or "none" => "",
+                        _ => null,
+                    };
+                    if (suffix == null)
+                        throw new ArgumentException(
+                            $"Invalid grouping: '{groupingVal}'. Valid values: clustered, stacked, percentStacked.");
+                    if (suffix.Length > 0) chartType += suffix;
+                }
                 var chartTitle = properties.GetValueOrDefault("title");
                 var categories = ChartHelper.ParseCategories(properties);
                 var seriesData = ChartHelper.ParseSeriesData(properties);
@@ -479,10 +502,18 @@ public partial class PowerPointHandler
                 chartPart.ChartSpace = chartSpace;
                 chartPart.ChartSpace.Save();
 
-                // Apply deferred properties (axisTitle, dataLabels, etc.) via SetChartProperties
-                var deferredProps = properties
-                    .Where(kv => ChartHelper.IsDeferredKey(kv.Key))
-                    .ToDictionary(kv => kv.Key, kv => kv.Value);
+                // Apply deferred properties (axisTitle, dataLabels, etc.) via SetChartProperties.
+                // CONSISTENCY(tracking-deferred-filter): iterate `Keys` (which bypasses
+                // TrackingPropertyDictionary's enumerator) and fetch deferred ones via
+                // TryGetValue (which DOES mark consumed). A naive `.Where(kv => IsDeferredKey(kv.Key))`
+                // pulled the IEnumerable<KVP> tracking enumerator, marking EVERY input key
+                // consumed — including typos like `name1=` — and suppressing UNSUPPORTED warnings.
+                var deferredProps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var dk in properties.Keys.ToList())
+                {
+                    if (ChartHelper.IsDeferredKey(dk) && properties.TryGetValue(dk, out var dv))
+                        deferredProps[dk] = dv;
+                }
                 if (deferredProps.Count > 0)
                     ChartHelper.SetChartProperties(chartPart, deferredProps);
 
@@ -513,6 +544,21 @@ public partial class PowerPointHandler
 
                 var (mediaStream, ext) = OfficeCli.Core.FileSource.Resolve(mediaPath);
                 using var mediaStreamDispose = mediaStream;
+
+                // CONSISTENCY(media-image-route): `type=media` with an image
+                // extension was falling through to the audio branch (the
+                // isVideo guard listed only mp4/avi/wmv/mpg/mov and the
+                // content-type default was "audio/mpeg"), so a GIF added via
+                // `--type media` became an audio element with a poster.
+                // Route image extensions through AddPicture instead — this
+                // matches the spirit of `type=media` as a "best effort by
+                // extension" router. Explicit `type=audio` / `type=video`
+                // still take precedence and skip this branch.
+                if (type.Equals("media", StringComparison.OrdinalIgnoreCase)
+                    && ext is ".gif" or ".jpg" or ".jpeg" or ".png" or ".bmp" or ".webp" or ".tif" or ".tiff" or ".svg")
+                {
+                    return AddPicture(parentPath, index, properties);
+                }
 
                 var mediaSlideIdx = int.Parse(mediaSlideMatch.Groups[1].Value);
                 var mediaSlideParts = GetSlideParts().ToList();

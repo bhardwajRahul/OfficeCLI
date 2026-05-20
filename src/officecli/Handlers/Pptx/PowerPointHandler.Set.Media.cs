@@ -260,9 +260,12 @@ public partial class PowerPointHandler
                 }
                 case "brightness" or "contrast":
                 {
-                    // Brightness ∈ [-100, 100] → a:lumOff (-100000..100000).
-                    // Contrast   ∈ [-100, 100] → a:lumMod (0..200000, baseline 100000).
-                    // CONSISTENCY(picture-set-props): mirrors Word picture set semantics.
+                    // Per OOXML CT_Blip (ECMA-376 §20.1.8.13) the only luminance
+                    // child accepted under <a:blip> is <a:lum> (CT_LuminanceEffect)
+                    // with bright= / contrast= attributes (each percent × 1000).
+                    // <a:lumMod> / <a:lumOff> belong to color transforms inside
+                    // <a:srgbClr> / <a:schemeClr>, NOT to blip — emitting them
+                    // here produces files that fail strict validation.
                     var blipBC = pic.BlipFill?.GetFirstChild<Drawing.Blip>();
                     if (blipBC == null) { unsupported.Add(key); break; }
                     if (!double.TryParse(value, System.Globalization.NumberStyles.Float,
@@ -270,36 +273,54 @@ public partial class PowerPointHandler
                         || bcVal < -100 || bcVal > 100)
                         throw new ArgumentException($"Invalid '{key}' value: '{value}'. Expected number in [-100, 100].");
 
-                    // Read existing values from BOTH strongly-typed and
-                    // OpenXmlUnknownElement forms — the SDK re-parses these
-                    // children as unknown (a:lumMod is not strong-typed on
-                    // Drawing.Blip), so a one-shot Remove of the strong type
-                    // leaves the unknown copy behind and yields duplicate
-                    // lumMod/lumOff after a second Set.
-                    int curLumModPct = 100000;
-                    int curLumOffPct = 0;
+                    // Preserve the other axis (brightness if we're setting
+                    // contrast, vice versa) from any existing <a:lum>; also
+                    // sweep any legacy a:lumMod/a:lumOff written by older
+                    // builds so re-Set doesn't compound the schema violation.
+                    int curBright = 0;
+                    int curContrast = 0;
                     var staleLum = new List<OpenXmlElement>();
-                    foreach (var kid in blipBC.ChildElements)
+                    foreach (var kid in blipBC.ChildElements.ToList())
                     {
                         if (kid.NamespaceUri != "http://schemas.openxmlformats.org/drawingml/2006/main") continue;
-                        if (kid.LocalName != "lumMod" && kid.LocalName != "lumOff") continue;
-                        var valAttr = kid.GetAttribute("val", "").Value;
-                        if (int.TryParse(valAttr, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var iv))
+                        if (kid is Drawing.LuminanceEffect existingLum)
                         {
-                            if (kid.LocalName == "lumMod") curLumModPct = iv;
-                            else curLumOffPct = iv;
+                            // Read both attributes via the strongly-typed
+                            // accessors; GetAttribute("name","") throws
+                            // "element does not allow the specified attribute"
+                            // when the attr happens to be absent on a typed
+                            // element even though it IS schema-permitted —
+                            // the SDK's strict-mode whitelist treats unset
+                            // typed attrs as out-of-range queries.
+                            if (existingLum.Brightness?.HasValue == true)
+                                curBright = existingLum.Brightness.Value;
+                            if (existingLum.Contrast?.HasValue == true)
+                                curContrast = existingLum.Contrast.Value;
+                            staleLum.Add(kid);
                         }
-                        staleLum.Add(kid);
+                        else if (kid.LocalName == "lumMod" || kid.LocalName == "lumOff")
+                        {
+                            // Legacy invalid output written by a previous
+                            // build — discard during this Set so the rewritten
+                            // <a:lum> takes over.
+                            staleLum.Add(kid);
+                        }
                     }
                     foreach (var s in staleLum) s.Remove();
 
                     if (key.Equals("brightness", StringComparison.OrdinalIgnoreCase))
-                        curLumOffPct = (int)(bcVal * 1000);
+                        curBright = (int)(bcVal * 1000);
                     else
-                        curLumModPct = 100000 + (int)(bcVal * 1000);
+                        curContrast = (int)(bcVal * 1000);
 
-                    blipBC.AppendChild(new Drawing.LuminanceModulation { Val = curLumModPct });
-                    blipBC.AppendChild(new Drawing.LuminanceOffset { Val = curLumOffPct });
+                    // Only emit the attributes that carry non-default values, so
+                    // a single-axis call produces `<a:lum bright="N"/>` rather
+                    // than `<a:lum bright="N" contrast="0"/>`. Both attributes
+                    // are optional per the OOXML schema.
+                    var lum = new Drawing.LuminanceEffect();
+                    if (curBright != 0) lum.Brightness = curBright;
+                    if (curContrast != 0) lum.Contrast = curContrast;
+                    blipBC.AppendChild(lum);
                     break;
                 }
                 case "link":
@@ -785,6 +806,15 @@ public partial class PowerPointHandler
         {
             switch (key.ToLowerInvariant())
             {
+                case "alt":
+                {
+                    // CONSISTENCY(media-alt): mirror picture Set (Set.Media.cs:40).
+                    // ViewAsIssues flags missing alt on audio/video <p:pic> too,
+                    // so they must be settable through the same surface.
+                    var nvDr = pic.NonVisualPictureProperties?.NonVisualDrawingProperties;
+                    if (nvDr != null) nvDr.Description = value;
+                    break;
+                }
                 case "volume":
                 {
                     if (shapeId == null) { unsupported.Add(key); break; }
@@ -921,7 +951,7 @@ public partial class PowerPointHandler
                 }
                 default:
                     if (unsupported.Count == 0)
-                        unsupported.Add($"{key} (valid media props: volume, autoplay, autostart, loop, trimstart, trimend, x, y, width, height, poster)");
+                        unsupported.Add($"{key} (valid media props: alt, volume, autoplay, autostart, loop, trimstart, trimend, x, y, width, height, poster)");
                     else
                         unsupported.Add(key);
                     break;
