@@ -148,10 +148,16 @@ public partial class WordHandler
         chartPart.ChartSpace = Core.ChartHelper.BuildChartSpace(chartType, chartTitle, categories, seriesData, properties);
 
         // Apply deferred properties (axisTitle, dataLabels, etc.) via SetChartProperties
-        // Must be called BEFORE Save() so the in-memory DOM is still available
-        var deferredProps = properties
-            .Where(kv => Core.ChartHelper.IsDeferredKey(kv.Key))
-            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        // Must be called BEFORE Save() so the in-memory DOM is still available.
+        // CONSISTENCY(tracking-deferred-filter): see PowerPointHandler.Add.Media.cs —
+        // .Where() over TrackingPropertyDictionary marks every key consumed and
+        // silently swallows real typos. Iterate Keys + TryGetValue per match instead.
+        var deferredProps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dk in properties.Keys.ToList())
+        {
+            if (Core.ChartHelper.IsDeferredKey(dk) && properties.TryGetValue(dk, out var dv))
+                deferredProps[dk] = dv;
+        }
         if (deferredProps.Count > 0)
             Core.ChartHelper.SetChartProperties(chartPart, deferredProps);
         else
